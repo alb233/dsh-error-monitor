@@ -3,6 +3,27 @@
 A DSH Web plugin that lists this session's failures as a Conversation View beside
 对话 / 上下文 / 编队 / 统计, so a failure is read where the conversation is.
 
+## Install
+
+Requires a DSH build that ships the Web client. Install from the plugin market, or
+point at this repository:
+
+```sh
+dsh plugin add github:alb233/dsh-error-monitor
+```
+
+The repo declares `dsh.bundle` and ships `cordis.patch.yml`, so the CLI can install
+from source. Pure ES modules, no build step, and no runtime dependency beyond the
+host packages listed in `dsh.client.inject`.
+
+## Requirements
+
+DSH `>=0.2.2-rc.1 <0.3.0-0`, as declared in `engines.dsh`. The Web client and its
+`conversation.view` / `sidebar.session.row.leading` slots must be present — they ship
+with `@deepseek-ai/dsh-client-ui-conversation` and
+`@deepseek-ai/dsh-client-ui-sidebar-right`. The plugin runs inside the Host, so it
+needs no separate Node runtime and no network access.
+
 ## What it shows
 
 One card per distinct failure the session recorded, newest first. Repeats of the
@@ -195,6 +216,13 @@ dsh plugin add github:alb233/dsh-error-monitor
 
 仓库声明了 `dsh.bundle` 并附带 `cordis.patch.yml`，因此 CLI 可以直接从源码安装。
 纯 ES module，无构建步骤，除 `dsh.client.inject` 里列出的宿主包之外没有运行时依赖。
+
+## 环境要求
+
+DSH `>=0.2.2-rc.1 <0.3.0-0`（见 `package.json` 的 `engines.dsh`）。需要 Web 客户端
+及其 `conversation.view` / `sidebar.session.row.leading` 插槽，这两者随
+`@deepseek-ai/dsh-client-ui-conversation` 与 `@deepseek-ai/dsh-client-ui-sidebar-right`
+提供。插件在宿主内运行，不需要单独的 Node 运行时，也不访问网络。
 
 ## 它显示什么
 

@@ -2,6 +2,9 @@
   "name": "@alb233/dsh-error-monitor",
   "version": "1.0.0",
   "type": "module",
+  "engines": {
+    "dsh": ">=0.2.2-rc.1 <0.3.0-0"
+  },
   "description": "Lists this session's runtime errors (turn errors, tool failures, command failures, subagent failures) as copyable cards inside the conversation view.",
   "exports": {
     ".": "./index.js",
@@ -13,8 +16,7 @@
     "index.js",
     "client.js",
     "cordis.patch.yml",
-    "locale/en.json",
-    "locale/zh.json",
+    "locale/*.json",
     "icon.svg",
     "README.md"
   ],
