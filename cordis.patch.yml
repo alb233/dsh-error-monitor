@@ -1,0 +1,3 @@
+- insert:
+    - id: '@alb233/dsh-error-monitor:error-monitor'
+      name: '@alb233/dsh-error-monitor'

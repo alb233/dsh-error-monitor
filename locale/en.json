@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "Session error monitor",
+    "description": "Lists every error this session reported, with source, time, turn, and raw message, plus copy and send-to-chat actions."
+  }
+}

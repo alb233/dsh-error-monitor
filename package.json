@@ -1,0 +1,49 @@
+{
+  "name": "@alb233/dsh-error-monitor",
+  "version": "1.0.0",
+  "type": "module",
+  "description": "Lists this session's runtime errors (turn errors, tool failures, command failures, subagent failures) as copyable cards inside the conversation view.",
+  "exports": {
+    ".": "./index.js",
+    "./client": "./client.js",
+    "./locale/*.json": "./locale/*.json",
+    "./icon": "./icon.svg"
+  },
+  "files": [
+    "index.js",
+    "client.js",
+    "cordis.patch.yml",
+    "locale/en.json",
+    "locale/zh.json",
+    "icon.svg",
+    "README.md"
+  ],
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    },
+    "client": {
+      "platform": "web",
+      "immediately": true,
+      "inject": [
+        "@deepseek-ai/dsh-client-ui-sidebar-right",
+        "@deepseek-ai/dsh-client-locale"
+      ]
+    }
+  },
+  "keywords": [
+    "dsh",
+    "dsh-plugin",
+    "errors",
+    "monitor",
+    "session"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/alb233/dsh-error-monitor.git"
+  },
+  "homepage": "https://github.com/alb233/dsh-error-monitor#readme",
+  "bugs": {
+    "url": "https://github.com/alb233/dsh-error-monitor/issues"
+  }
+}
