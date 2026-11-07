@@ -5,15 +5,16 @@ A DSH Web plugin that lists this session's failures as a Conversation View besid
 
 ## Install
 
-Requires a DSH build that ships the Web client. Install from the plugin market, or
-point at this repository:
+Requires a DSH build that ships the Web client. Install from the plugin market, from
+npm, or point at this repository:
 
 ```sh
+dsh plugin add @alb233/dsh-error-monitor
 dsh plugin add github:alb233/dsh-error-monitor
 ```
 
 The repo declares `dsh.bundle` and ships `cordis.patch.yml`, so the CLI can install
-from source. Pure ES modules, no build step, and no runtime dependency beyond the
+from either source. Pure ES modules, no build step, and no runtime dependency beyond the
 host packages listed in `dsh.client.inject`.
 
 ## Requirements
@@ -176,7 +177,8 @@ Two heavier paths remain unimplemented, in cost order:
    including children. Most complete and independent of the loaded window, but exposing
    that to the panel needs a Remote namespace/route, which is not an ordinary plugin API.
 
-Location: `<workspace>/tools/audit-error-summaries.mjs`.
+Location: `tools/audit-error-summaries.mjs` in this repository, shipped in the npm
+package as well.
 
 ## Data scope
 
@@ -208,13 +210,14 @@ the layout is touched.
 
 ## 安装
 
-需要带 Web 客户端的 DSH 版本。可以从插件市场安装，或直接指向本仓库：
+需要带 Web 客户端的 DSH 版本。可以从插件市场安装，或指向 npm 包、本仓库：
 
 ```sh
+dsh plugin add @alb233/dsh-error-monitor
 dsh plugin add github:alb233/dsh-error-monitor
 ```
 
-仓库声明了 `dsh.bundle` 并附带 `cordis.patch.yml`，因此 CLI 可以直接从源码安装。
+仓库声明了 `dsh.bundle` 并附带 `cordis.patch.yml`，因此 CLI 可以从源码或 npm 包安装。
 纯 ES module，无构建步骤，除 `dsh.client.inject` 里列出的宿主包之外没有运行时依赖。
 
 ## 环境要求
@@ -346,7 +349,7 @@ node tools/audit-error-summaries.mjs --self-test
    origin），`session/event` 覆盖包括子会话在内的所有会话。最完整、也不依赖已加载窗口，
    但把它暴露给面板需要 Remote 命名空间/路由，那不是普通插件 API。
 
-位置：`<workspace>/tools/audit-error-summaries.mjs`。
+位置：本仓库的 `tools/audit-error-summaries.mjs`，npm 包里也带这一份。
 
 ## 数据范围
 
