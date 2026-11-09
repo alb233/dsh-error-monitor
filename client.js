@@ -1,14 +1,15 @@
 window.__ModuleLoader__.load({
-  id: '@alb233/dsh-error-monitor',
+  id: '@dsh-local/view-ad2ab3ad-8a5c-4e88-a7bf-ee0bb5b23776',
   factory(require) {
     const React = require('react');
     const h = React.createElement;
     const { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } = React;
 
-    const PACKAGE = '@alb233/dsh-error-monitor';
+    const PACKAGE = '@dsh-local/view-ad2ab3ad-8a5c-4e88-a7bf-ee0bb5b23776';
     /** View cell id and the key its body registers under. */
     const TAB_TYPE_ID = PACKAGE;
     const SEEN_PREFIX = PACKAGE + '.seen.';
+    const RESOLVED_PREFIX = PACKAGE + '.resolved.';
     const VIEW_ORDER = 50;
 
     /* ---------------------------------------------------------------- locale */
@@ -34,7 +35,37 @@ window.__ModuleLoader__.load({
         'banner.latest': 'Latest error',
         'filter.all': 'All',
         'filter.unread': 'Unread only',
+        'filter.unresolved': 'Unresolved only',
+        'filter.unresolvedHint': 'Hide failures already marked as fixed',
         'filter.markAll': 'Mark all read',
+        'docs.toggle': 'How to use this panel',
+        'docs.toggleHint': 'what each button does',
+        'docs.groupCard': 'On an error card',
+        'docs.groupBar': 'Top bar and filters',
+        'docs.copy.name': 'Copy',
+        'docs.copy.desc': 'Copies this error as plain text, cause and arguments included, for pasting somewhere else.',
+        'docs.send.name': 'Send to chat',
+        'docs.send.desc': 'Diagnosis: sends the summary, cause, session id and seq into the conversation so the agent reads the raw event before judging.',
+        'docs.retry.name': 'Retry step',
+        'docs.retry.desc': 'Reproduction: resends the same tool with the same arguments, so the agent repeats that one step as it was.',
+        'docs.resolve.name': 'Mark resolved',
+        'docs.resolve.desc': 'Marks this cause as fixed; every repeat of it follows. Click again to reopen. The mark survives a restart.',
+        'docs.full.name': 'Send full text',
+        'docs.full.desc': 'Also sends the complete raw error, for cases a summary cannot explain.',
+        'docs.report.name': 'Copy report',
+        'docs.report.desc': 'Turns the current filtered view into a Markdown report on the clipboard, ready to hand to a fresh session.',
+        'docs.search.name': 'Search',
+        'docs.search.desc': 'Keyword search over message, raw error, tool, path, arguments and code. Space-separated words must all match.',
+        'docs.source.name': 'Source chips',
+        'docs.source.desc': 'Narrows the list to one source: turns, tools, commands, subagents, runtime.',
+        'docs.unresolved.name': 'Only unresolved',
+        'docs.unresolved.desc': 'Hides groups already marked resolved. This chip appears only once something is marked.',
+        'docs.unread.name': 'Only unread',
+        'docs.unread.desc': 'Shows what arrived after the last time you read the list.',
+        'docs.markAll.name': 'Mark all read',
+        'docs.markAll.desc': 'Clears the unread counter for everything currently listed.',
+        'docs.loadOlder.name': 'Load earlier',
+        'docs.loadOlder.desc': 'Reads older records back out of the session log when the list starts mid-history.',
         'filter.search': 'Filter…',
         'filter.searchHint': 'Matches any of: message, raw error, tool name, path, error code. Space-separated keywords must all match.',
         'filter.empty': 'No failures match this filter',
@@ -56,6 +87,11 @@ window.__ModuleLoader__.load({
         'item.turnUnknown': 'No turn position',
         'item.code': 'Code {code}',
         'item.cause': 'Cause: {cause}',
+        'item.args': 'Call arguments: {args}',
+        'item.resolved': 'Resolved',
+        'item.resolve': 'Mark resolved',
+        'item.unresolve': 'Reopen',
+        'item.retry': 'Rerun this step',
         'cause.enoent': 'The path does not exist — the file or directory is misnamed or was never created',
         'cause.notdir': 'A segment of the path is not a directory',
         'cause.inuse': 'Another instance already holds this resource — stop it first',
@@ -73,6 +109,8 @@ window.__ModuleLoader__.load({
         'cause.rate': 'Rate limited — retry later',
         'cause.quota': 'The model service account is out of balance — top up the account or switch to another route',
         'cause.nogit': 'The current directory is not a git repository',
+        'cause.editmatch': 'The text to replace was not found in the file — the file changed since it was read, or the snippet differs by one character',
+        'cause.editambig': 'The anchor matches more than once — the snippet is too loose; extend it with the surrounding lines instead of opening up the match',
         'cause.syntax': 'Python syntax or indentation error — the interpreter failed before running anything',
         'cause.traceback': 'Python raised an exception — the last traceback line names the real cause',
         'cause.encoding': 'Text encoding mismatch — the file is probably not UTF-8 (try GBK/GB18030)',
@@ -94,6 +132,10 @@ window.__ModuleLoader__.load({
         'cause.killed': 'The process was killed (exit 137 / SIGKILL) — often OOM or a forced stop',
         'cause.reset': 'The connection dropped mid-request — network hiccup or the upstream stream died; just retry',
         'cause.abort': 'The request was aborted before it finished',
+        'cause.jstype': 'JavaScript/TypeScript runtime error — the first stack line names the undefined variable or the wrong type',
+        'cause.coderun': 'Code execution failed — the exception line right after it names the real cause',
+        'cause.review': 'Tool auto-review failed — the review step itself broke; the reason quoted after it is the real one',
+        'cause.unknown': 'No known signature — the raw error has to be read',
         'item.scale': 'Last request ≈ {tokens} tokens ({input} in · {cache} cached)',
         'item.scaleNoCache': 'Last request ≈ {tokens} tokens ({input} in)',
         'item.since': 'first {time}',
@@ -111,9 +153,11 @@ window.__ModuleLoader__.load({
         'item.expand': 'Show raw error',
         'item.collapse': 'Hide raw error',
         'send.prompt':
-          'I hit an error in this session. Please analyse the cause and propose a fix.\n\nSource: {source}\nTurn: {turn}\nTime: {time}\nCode: {code}\nSummary: {summary}\n\nThe summary above is trimmed; the complete raw error is on this record’s “Copy details” action (session event seq={seq}).',
+          'I hit an error in this session. Please analyse the cause and propose a fix.\n\nSource: {source}\nTurn: {turn}\nTime: {time}\nCode: {code}\nLikely cause: {cause}\nSummary: {summary}\nArguments: {args}\nSession id: {sessionId}\nSession event seq: {seq}\n\nThe summary above is trimmed. Read the original event before diagnosing: call session_event_read with seq={seq} (add session_id={sessionId}; if that id is rejected, call it with seq={seq} only to read the current session). Then work from the real error text instead of the digest.',
         'send.promptFull':
-          'I hit an error in this session. Please analyse the cause and propose a fix.\n\nSource: {source}\nTurn: {turn}\nTime: {time}\nCode: {code}\nRaw error:\n```\n{raw}\n```',
+          'I hit an error in this session. Please analyse the cause and propose a fix.\n\nSource: {source}\nTurn: {turn}\nTime: {time}\nCode: {code}\nLikely cause: {cause}\nArguments: {args}\nSession id: {sessionId}\nSession event seq: {seq}\nRaw error:\n```\n{raw}\n```\n\nIf the raw text above is still cut off, read the original event with session_event_read(seq={seq}) (add session_id={sessionId} if needed) before concluding.',
+        'send.retry':
+          'Please re-run exactly this step of the session and report the result.\n\nSource: {source}\nTurn: {turn}\nTool: {tool}\nArguments: {args}\nCode: {code}\nLikely cause: {cause}\nError: {summary}\nSession id: {sessionId}\nSession event seq: {seq}\n\nUse the arguments above verbatim — changing them would test something else. If the step succeeds this time, say what changed; if it fails again, read the original event with session_event_read(seq={seq}) and compare the two errors before guessing.',
         'send.turn': '{n}',
         'send.unknown': 'unknown',
         'new.tag': 'NEW',
@@ -138,7 +182,37 @@ window.__ModuleLoader__.load({
         'banner.latest': '最新报错',
         'filter.all': '全部',
         'filter.unread': '只看未读',
+        'filter.unresolved': '只看未解决',
+        'filter.unresolvedHint': '隐藏已标记为解决的报错',
         'filter.markAll': '全部已读',
+        'docs.toggle': '使用说明',
+        'docs.toggleHint': '每个按钮干什么',
+        'docs.groupCard': '单条报错卡片上',
+        'docs.groupBar': '顶栏与筛选',
+        'docs.copy.name': '复制',
+        'docs.copy.desc': '把这条报错的详情文本复制走，含归因与调用参数，方便贴到别处。',
+        'docs.send.name': '发回对话',
+        'docs.send.desc': '诊断：把摘要、归因、会话 ID 与 seq 发进对话，让模型先读原始事件再下结论。',
+        'docs.retry.name': '重跑此步',
+        'docs.retry.desc': '复现：带原工具名和原调用参数，请模型把这一步原样再跑一次。',
+        'docs.resolve.name': '标记已解决',
+        'docs.resolve.desc': '给这个根因打上已解决，同根因的重复报错一起标记；再点一次撤销，重启不丢。',
+        'docs.full.name': '发送完整原文',
+        'docs.full.desc': '把完整的原始错误也一起发进对话，摘要讲不清时用。',
+        'docs.report.name': '复制报告',
+        'docs.report.desc': '把当前筛选结果整理成 Markdown 报告复制到剪贴板，可整段交给新会话。',
+        'docs.search.name': '搜索',
+        'docs.search.desc': '在报错文本、工具名、路径、参数、错误码里查关键词；空格分词表示都要命中。',
+        'docs.source.name': '来源筛选',
+        'docs.source.desc': '只看某一类报错：轮次、工具、命令、子代理、运行时。',
+        'docs.unresolved.name': '只看未解决',
+        'docs.unresolved.desc': '藏掉已经标记已解决的分组；没有任何标记时这个按钮不出现。',
+        'docs.unread.name': '只看未读',
+        'docs.unread.desc': '只看上次阅读之后新出现的报错。',
+        'docs.markAll.name': '全部已读',
+        'docs.markAll.desc': '把当前列出的报错全部标为已读，清掉未读计数。',
+        'docs.loadOlder.name': '加载更早',
+        'docs.loadOlder.desc': '列表从会话中段开始时，从日志里往前补更早的记录。',
         'filter.search': '过滤报错…',
         'filter.searchHint': '可匹配：错误文案、完整原文、工具名、路径、错误码；空格分隔多个关键词，需同时满足',
         'filter.empty': '没有符合筛选的报错',
@@ -160,6 +234,11 @@ window.__ModuleLoader__.load({
         'item.turnUnknown': '无轮次位置',
         'item.code': '错误码 {code}',
         'item.cause': '原因：{cause}',
+        'item.args': '调用参数：{args}',
+        'item.resolved': '已解决',
+        'item.resolve': '标记已解决',
+        'item.unresolve': '重新打开',
+        'item.retry': '重跑此步',
         'cause.enoent': '路径不存在：文件或目录名写错，或该文件尚未创建',
         'cause.notdir': '路径中有一段不是目录',
         'cause.inuse': '资源已被另一个实例占用，需先停掉旧实例',
@@ -177,6 +256,8 @@ window.__ModuleLoader__.load({
         'cause.rate': '触发限流，稍后重试',
         'cause.quota': '模型服务账号余额不足：充值或切换路由',
         'cause.nogit': '当前目录不是 git 仓库',
+        'cause.editmatch': '要替换的文本在文件中不存在：文件在读取后被改动，或匹配片段差了一个字符',
+        'cause.editambig': '锚点文本在文件中出现多次：片段太宽，应带上上下文行把它唯一化，而不是放开匹配范围',
         'cause.syntax': 'Python 语法或缩进错误：解释器在运行前就失败了',
         'cause.traceback': 'Python 抛了异常：traceback 最后一行（异常类型与消息）通常是根因',
         'cause.encoding': '文本编码不匹配：文件可能不是 UTF-8，可试 GBK/GB18030',
@@ -198,6 +279,10 @@ window.__ModuleLoader__.load({
         'cause.killed': '进程被强杀（exit 137 / SIGKILL）：常见于内存不足或手动终止',
         'cause.reset': '请求中途连接断开：网络抖动或上游断流，直接重试即可',
         'cause.abort': '请求在完成前被中止',
+        'cause.jstype': 'JavaScript/TypeScript 运行时错误：栈顶第一行通常点名未定义变量或类型用错',
+        'cause.coderun': '代码执行失败：紧跟其后的异常行才是真正原因',
+        'cause.review': '工具自动审查失败：是审查步骤本身出错，其后引用的原因才是真因',
+        'cause.unknown': '未匹配到已知特征：需要读原始错误',
         'item.scale': '最近一次请求 ≈ {tokens} tokens（输入 {input} · 缓存 {cache}）',
         'item.scaleNoCache': '最近一次请求 ≈ {tokens} tokens（输入 {input}）',
         'item.since': '最早 {time}',
@@ -215,9 +300,11 @@ window.__ModuleLoader__.load({
         'item.expand': '展开原始错误',
         'item.collapse': '收起原始错误',
         'send.prompt':
-          '我在本会话遇到一次报错，请帮我分析原因并给出处理方案。\n\n来源：{source}\n轮次：{turn}\n时间：{time}\n错误码：{code}\n摘要：{summary}\n\n摘要是精简过的；完整原文在该条记录的「复制详情」里（会话事件 seq={seq}）。',
+          '我在本会话遇到一次报错，请帮我分析原因并给出处理方案。\n\n来源：{source}\n轮次：{turn}\n时间：{time}\n错误码：{code}\n初步归因：{cause}\n摘要：{summary}\n调用参数：{args}\n会话 ID：{sessionId}\n会话事件 seq：{seq}\n\n上面的摘要是精简过的。请先读原始事件再判断：调用 session_event_read，seq={seq}（需要指定会话时加 session_id={sessionId}；若该 ID 被拒绝，就只用 seq={seq} 读当前会话），然后基于真实报错文本分析，不要凭摘要猜。',
         'send.promptFull':
-          '我在本会话遇到一次报错，请帮我分析原因并给出处理方案。\n\n来源：{source}\n轮次：{turn}\n时间：{time}\n错误码：{code}\n原始错误：\n```\n{raw}\n```',
+          '我在本会话遇到一次报错，请帮我分析原因并给出处理方案。\n\n来源：{source}\n轮次：{turn}\n时间：{time}\n错误码：{code}\n初步归因：{cause}\n调用参数：{args}\n会话 ID：{sessionId}\n会话事件 seq：{seq}\n原始错误：\n```\n{raw}\n```\n\n若上面的原文仍被截断，先用 session_event_read(seq={seq})（必要时加 session_id={sessionId}）读出原始事件再下结论。',
+        'send.retry':
+          '请原样重跑本会话的这一步骤，并说明结果。\n\n来源：{source}\n轮次：{turn}\n工具：{tool}\n调用参数：{args}\n错误码：{code}\n初步归因：{cause}\n错误：{summary}\n会话 ID：{sessionId}\n会话事件 seq：{seq}\n\n参数请照原文使用，改了就是在测另一件事。若这次成功，说明是什么变了；若仍失败，先用 session_event_read(seq={seq}) 读原始事件，对比两次报错的差异再判断。',
         'send.turn': '第 {n} 轮',
         'send.unknown': '未知',
         'new.tag': '新',
@@ -323,10 +410,10 @@ window.__ModuleLoader__.load({
     }
 
     /**
-     * The seen watermark is read here and in the header badge, so a write must wake
-     * both. localStorage alone gives no cross-component notification.
+     * Panel state is read here and in the header badge, so a write must wake both.
+     * localStorage alone gives no cross-component notification.
      */
-    const seenListeners = new Set();
+    const storeListeners = new Set();
 
     function readNumber(key) {
       try {
@@ -346,7 +433,30 @@ window.__ModuleLoader__.load({
       } catch {
         /* storage unavailable: the panel keeps working, only the watermark resets */
       }
-      for (const listener of seenListeners) listener();
+      for (const listener of storeListeners) listener();
+    }
+
+    /**
+     * A string store for the small JSON blobs the panel keeps per Session. The
+     * hook below hands out the raw string, because useSyncExternalStore compares
+     * snapshots by identity and a freshly parsed object would never settle.
+     */
+    function readStoreString(key) {
+      try {
+        return window.localStorage.getItem(key);
+      } catch {
+        return null;
+      }
+    }
+
+    function writeStoreString(key, value) {
+      try {
+        if (value === null) window.localStorage.removeItem(key);
+        else window.localStorage.setItem(key, value);
+      } catch {
+        /* storage unavailable: the mark is lost, the panel keeps working */
+      }
+      for (const listener of storeListeners) listener();
     }
 
     /**
@@ -385,11 +495,85 @@ window.__ModuleLoader__.load({
 
     function useSeenValue(key) {
       const subscribe = useCallback((listener) => {
-        seenListeners.add(listener);
-        return () => seenListeners.delete(listener);
+        storeListeners.add(listener);
+        return () => storeListeners.delete(listener);
       }, []);
       const getSnapshot = useCallback(() => readNumber(key), [key]);
       return useSyncExternalStore(subscribe, getSnapshot, getSnapshot);
+    }
+
+    function useStoreString(key) {
+      const subscribe = useCallback((listener) => {
+        storeListeners.add(listener);
+        return () => storeListeners.delete(listener);
+      }, []);
+      const getSnapshot = useCallback(() => readStoreString(key), [key]);
+      return useSyncExternalStore(subscribe, getSnapshot, getSnapshot);
+    }
+
+    /**
+     * A failure the user has declared fixed. The mark hangs off the group key, so
+     * it survives restarts and covers every repeat of the same root cause; a new
+     * occurrence of a fixed failure still shows up as unread.
+     */
+    const RESOLVED_CAP = 300;
+
+    function readResolved(sessionId) {
+      const raw = readStoreString(RESOLVED_PREFIX + String(sessionId));
+      if (raw === null) return {};
+      try {
+        const parsed = JSON.parse(raw);
+        return isRecord(parsed) ? parsed : {};
+      } catch {
+        return {};
+      }
+    }
+
+    function writeResolved(sessionId, map) {
+      let keys = Object.keys(map);
+      if (keys.length > RESOLVED_CAP) {
+        keys = keys
+          .sort((a, b) => (Number(map[b]) || 0) - (Number(map[a]) || 0))
+          .slice(0, RESOLVED_CAP);
+        const kept = {};
+        for (const key of keys) kept[key] = map[key];
+        map = kept;
+        keys = Object.keys(map);
+      }
+      writeStoreString(
+        RESOLVED_PREFIX + String(sessionId),
+        keys.length === 0 ? null : JSON.stringify(map),
+      );
+    }
+
+    /** Mark one group as fixed, recording when so the cap evicts the oldest. */
+    function markResolved(sessionId, key, at) {
+      if (typeof key !== 'string' || key === '') return;
+      const map = readResolved(sessionId);
+      map[key] = typeof at === 'number' && Number.isFinite(at) ? at : Date.now();
+      writeResolved(sessionId, map);
+    }
+
+    function unmarkResolved(sessionId, key) {
+      if (typeof key !== 'string' || key === '') return;
+      const map = readResolved(sessionId);
+      if (!Object.prototype.hasOwnProperty.call(map, key)) return;
+      delete map[key];
+      writeResolved(sessionId, map);
+    }
+
+    /** The resolved marks of one Session, re-read whenever they are written. */
+    function useResolvedMap(sessionId) {
+      const raw = useStoreString(RESOLVED_PREFIX + String(sessionId));
+      return useMemo(() => {
+        if (raw === null) return {};
+        try {
+          const parsed = JSON.parse(raw);
+          return isRecord(parsed) ? parsed : {};
+        } catch {
+          return {};
+        }
+      }, [raw]);
     }
 
     /* ------------------------------------------------------------- error feed */
@@ -675,33 +859,91 @@ window.__ModuleLoader__.load({
       return null;
     }
 
+    /**
+     * The arguments a failing call was made with. A path alone does not say
+     * what went wrong: the command, the url and the pattern are the scene of
+     * the failure, and whoever reads the report needs them to reproduce it.
+     * Secret-looking values are masked, because this text leaves the panel.
+     */
+    function argumentSummary(argumentsText) {
+      if (typeof argumentsText !== 'string' || argumentsText === '') return null;
+      let parsed;
+      try {
+        parsed = JSON.parse(argumentsText);
+      } catch {
+        return null;
+      }
+      if (!isRecord(parsed)) return null;
+      const secret = /(token|secret|password|passwd|api[_-]?key|authorization|credential)/i;
+      // A secret can also sit inside a value the key name does not betray:
+      // `curl -H "Authorization: Bearer sk-..."` is still a credential.
+      const scrub = (text) =>
+        text
+          .replace(/(Bearer\s+)[A-Za-z0-9._\-]{6,}/gi, '$1***')
+          .replace(/\bsk-[A-Za-z0-9._\-]{6,}/gi, '***')
+          .replace(/((?:password|passwd|pwd|token|api[_-]?key|secret)\s*[=:]\s*)[^\s"',;]+/gi, '$1***');
+      // File bodies and patches say nothing about why a call failed besides
+      // being long; the path already names the target.
+      const bulky = /^(content|new_string|old_string|text|body|diff|patch)$/i;
+      const parts = [];
+      for (const key of Object.keys(parsed)) {
+        const value = parsed[key];
+        if (typeof value !== 'string' || value === '') continue;
+        if (secret.test(key)) {
+          parts.push(key + '=***');
+          continue;
+        }
+        const flat = scrub(value.replace(/\s+/g, ' '));
+        if (bulky.test(key) && flat.length > 80) {
+          parts.push(key + '=(' + String(value.length) + ' chars)');
+          continue;
+        }
+        const shown = flat.length > 160 ? flat.slice(0, 160) + '…' : flat;
+        parts.push(key + '=' + shown);
+      }
+      if (parts.length === 0) return null;
+      const out = parts.join(' · ');
+      return out.length <= 600 ? out : out.slice(0, 600) + '…';
+    }
+
     /* --- error causes (start) --- */
 
     /**
      * Raw stderr rarely names its own cause: “系统找不到指定的文件。(os error 2)” is a
      * path problem, but a reader has to know that “2” means ENOENT. This table maps
      * the recurring signatures onto a locale key, so the card can state the cause in
-     * one plain sentence instead of leaving the reader to decode it. First match
-     * wins; an unrecognised failure gets no cause line rather than a wrong guess.
+     * one plain sentence instead of leaving the reader to decode it.
+     *
+     * Order carries the whole weight, because the first match wins: a specific
+     * signature is always tested before a broad one. “403 insufficient balance” is a
+     * billing failure and not a permission one, so quota is tested before forbidden;
+     * the generic words (timeout, reset, abort) sit at the very end and only fire
+     * when nothing more specific did. An unrecognised failure gets no cause line
+     * rather than a wrong guess.
      */
     const CAUSES = [
-      {
-        key: 'cause.enoent',
-        re: /os error 2\b|ENOENT|No such file or directory|no such file|系统找不到指定的文件|找不到指定的文件|The system cannot find the file|FileNotFoundError/i,
-      },
-      { key: 'cause.notdir', re: /os error 3\b|ENOTDIR|不是目录/ },
-      { key: 'cause.inuse', re: /already in use by another|已有另一个|已被占用|being used by another process|另一个程序正在使用/i },
-      { key: 'cause.busy', re: /os error 32\b|EBUSY/ },
-      { key: 'cause.pipe', re: /named pipe|命名管道|EPERM.*pipe|pipe.*EPERM/i },
-      { key: 'cause.sandbox', re: /sandbox: file access denied|\[sandbox:/i },
-      { key: 'cause.denied', re: /os error 5\b|EACCES|EPERM|PermissionError|Permission denied|拒绝访问|Access is denied/i },
-      { key: 'cause.command', re: /command not found|不是内部或外部命令|Executable not found/i },
+      { key: 'cause.quota', re: /ACCOUNT_QUOTA|insufficient balance|insufficient_quota|quota exceeded|billing_error|余额不足/i },
+      { key: 'cause.rate', re: /(?<![0-9])(429|424)(?![0-9])|Too Many Requests|rate[ _-]?limit|bili_throttle|throttl|限流/i },
+      { key: 'cause.auth', re: /(?<![0-9])401(?![0-9])|Unauthorized|authentication required|invalid api key/i },
+      { key: 'cause.forbidden', re: /(?<![0-9])403(?![0-9])|Forbidden|OWNER_REQUIRED|权限被拒/i },
+      { key: 'cause.payload', re: /(?<![0-9])413(?![0-9])|Payload Too Large|request entity too large/i },
+      { key: 'cause.gateway', re: /(?<![0-9])50[234](?![0-9])|Bad Gateway|Service Unavailable|Gateway Timeout/i },
+      { key: 'cause.jstype', re: /ReferenceError|TypeError|is not defined|Cannot read propert|Cannot access|undefined is not/i },
+      { key: 'cause.syntax', re: /SyntaxError|IndentationError|TabError/i },
       { key: 'cause.module', re: /ModuleNotFoundError|No module named|ModuleNotFound|Cannot find module|ERR_MODULE_NOT_FOUND/i },
-      { key: 'cause.syntax', re: /SyntaxError|IndentationError|TabError/ },
-      { key: 'cause.traceback', re: /Traceback \(most recent call last\)/i },
-      { key: 'cause.encoding', re: /UnicodeDecodeError|UnicodeEncodeError|codec can't decode|codec can't encode|GBK|gb18030/i },
-      { key: 'cause.sqlite', re: /sqlite3\.|no such table|database is locked|UNIQUE constraint failed|OperationalError/i },
-      { key: 'cause.yaml', re: /yaml\.scanner|YAMLException|mapping values are not allowed/i },
+      { key: 'cause.coderun', re: /CODE_RUN_FAILED|CodeRunFailedError|code run failed/i },
+      { key: 'cause.review', re: /AUTO_REVIEW_FAILED|AutoReviewFailedError|auto-review|auto review failed/i },
+      { key: 'cause.enoent', re: /os error 2(?![0-9])|ENOENT|No such file or directory|系统找不到指定的文件|找不到指定的文件|The system cannot find the file|FileNotFoundError/i },
+      { key: 'cause.notdir', re: /os error 3(?![0-9])|ENOTDIR|不是目录/i },
+      { key: 'cause.inuse', re: /already in use by another|已有另一个|已被占用|being used by another process|另一个程序正在使用/i },
+      { key: 'cause.busy', re: /os error 32(?![0-9])|EBUSY/i },
+      { key: 'cause.pipe', re: /named pipe|命名管道|EPERM.*pipe|pipe.*EPERM/i },
+      { key: 'cause.sandbox', re: /sandbox: file access denied|sandbox denied|sandbox: denied|sandbox blocked/i },
+      { key: 'cause.denied', re: /os error 5(?![0-9])|EACCES|EPERM|PermissionError|Permission denied|拒绝访问|Access is denied/i },
+      { key: 'cause.command', re: /command not found|不是内部或外部命令|Executable not found/i },
+      { key: 'cause.encoding', re: /UnicodeDecodeError|UnicodeEncodeError|codec can.t decode|codec can.t encode|GBK|gb18030/i },
+      { key: 'cause.sqlite', re: /sqlite3[.]|no such table|database is locked|UNIQUE constraint failed|OperationalError/i },
+      { key: 'cause.yaml', re: /yaml[.]scanner|YAMLException|mapping values are not allowed/i },
       { key: 'cause.json', re: /EJSONPARSE|JSONDecodeError|Unexpected token .* in JSON|Unexpected end of JSON/i },
       { key: 'cause.eresolve', re: /ERESOLVE|peer dep/i },
       { key: 'cause.npm', re: /npm ERR!|pnpm ERR|ELIFECYCLE/i },
@@ -710,32 +952,63 @@ window.__ModuleLoader__.load({
       { key: 'cause.refused', re: /ECONNREFUSED|Connection refused|拒绝连接|actively refused/i },
       { key: 'cause.port', re: /EADDRINUSE|Address already in use|端口.*被占用|10048/i },
       { key: 'cause.dns', re: /getaddrinfo|ENOTFOUND|could not resolve host|Name or service not known/i },
-      { key: 'cause.tls', re: /CERT_HAS_EXPIRED|certificate verify failed|self.signed certificate|\bSSL\b|\bTLS\b/i },
-      { key: 'cause.timeout', re: /ETIMEDOUT|timed out|timeout|超时/i },
-      { key: 'cause.auth', re: /\b401\b|Unauthorized|authentication required/i },
-      { key: 'cause.forbidden', re: /\b403\b|Forbidden|OWNER_REQUIRED/i },
-      { key: 'cause.missing', re: /\b404\b|Not Found/i },
-      { key: 'cause.payload', re: /\b413\b|Payload Too Large|request entity too large/i },
-      { key: 'cause.gateway', re: /\b50[234]\b|Bad Gateway|Service Unavailable|Gateway Timeout/i },
-      { key: 'cause.quota', re: /ACCOUNT_QUOTA|insufficient balance|insufficient_quota|quota exceeded|billing/i },
-      { key: 'cause.rate', re: /\b429\b|Too Many Requests|rate limit|限流/i },
+      { key: 'cause.tls', re: /CERT_HAS_EXPIRED|certificate verify failed|self.signed certificate|SSL handshake|TLS handshake/i },
       { key: 'cause.nospace', re: /ENOSPC|No space left on device|磁盘空间不足/i },
       { key: 'cause.readonly', re: /EROFS|read-only file system|只读文件系统/i },
       { key: 'cause.mfile', re: /EMFILE|too many open files/i },
       { key: 'cause.killed', re: /exit code 137|SIGKILL|signal: killed/i },
-      {
-        key: 'cause.reset',
-        re: /ECONNRESET|ECONNABORTED|EPIPE|socket hang up|connection reset|fetch failed|unexpected EOF|Empty reply from server|network error/i,
-      },
-      { key: 'cause.abort', re: /\baborted\b|request was aborted|AbortError|operation was canceled|operation cancelled/i },
       { key: 'cause.nogit', re: /not a git repository/i },
+      { key: 'cause.editmatch', re: /FS_EDIT_NOT_FOUND|old_string was not found|String to replace not found|replace_all.*not found/i },
+      { key: 'cause.editambig', re: /FS_AMBIGUOUS_EDIT|old_string matched \d+ times|matched multiple times|is not unique/i },
+      { key: 'cause.missing', re: /(?<![0-9])404(?![0-9])|Not Found/i },
+      { key: 'cause.traceback', re: /Traceback .most recent call last./i },
+      { key: 'cause.timeout', re: /ETIMEDOUT|timed out|timeout|超时/i },
+      { key: 'cause.reset', re: /ECONNRESET|ECONNABORTED|EPIPE|socket hang up|connection reset|fetch failed|unexpected EOF|Empty reply from server|network error/i },
+      { key: 'cause.abort', re: /aborted|request was aborted|AbortError|operation was canceled|operation cancelled/i },
     ];
 
-    /** The locale key of the most likely cause, or null when nothing matches. */
+    /**
+     * The locale key of the most likely cause, or null when nothing matches.
+     * The runtime appends its own notices to tool output ("[sandbox: escalation
+     * available ...]"); those name the sandbox and a denial, so a table running
+     * over the raw text would blame them. They are removed before any signature
+     * is tested.
+     */
     function explainFailure(text) {
       if (typeof text !== 'string' || text === '') return null;
-      for (const cause of CAUSES) if (cause.re.test(text)) return cause.key;
+      const clean = stripHintNoise(text);
+      for (const cause of CAUSES) if (cause.re.test(clean)) return cause.key;
       return null;
+    }
+
+    /**
+     * Host notices that ride along with tool output. They are not part of the
+     * failure, so they must not decide what the failure is called.
+     */
+    function stripHintNoise(text) {
+      if (typeof text !== 'string' || text === '') return '';
+      return text
+        .replace(/\[[^\]]*escalation available[^\]]*\]/gi, ' ')
+        .replace(/retry this exact operation once with sandbox_permissions[^\n]* /gi, ' ');
+    }
+
+    /**
+     * The cause of one record. Attribution reads the whole raw payload and not
+     * only the visible summary: the class of a failure often appears only in the
+     * untouched error body.
+     */
+    function causeKeyOf(record) {
+      if (record === undefined || record === null) return null;
+      const parts = [
+        record.detail,
+        record.message,
+        record.code === null || record.code === undefined ? '' : String(record.code),
+        record.raw,
+      ];
+      const text = parts
+        .filter((part) => typeof part === 'string' && part !== '')
+        .join('\n');
+      return explainFailure(text);
     }
 
     /* --- error causes (end) --- */
@@ -759,9 +1032,19 @@ window.__ModuleLoader__.load({
       return shown.length <= 300 ? shown : shown.slice(0, 300) + '…';
     }
 
+    /**
+     * Keep both ends of a long text. The head says what failed and the tail says
+     * why, because a stack trace keeps its root cause in the last line. A middle
+     * cut would throw away exactly the line a reader needs.
+     */
     function truncate(text, limit) {
       if (typeof text !== 'string') return '';
-      return text.length <= limit ? text : text.slice(0, limit) + '…';
+      if (text.length <= limit) return text;
+      const head = Math.floor(limit * 0.6);
+      const tail = limit - head;
+      const dropped = text.length - head - tail;
+      const marker = '\n...[' + dropped + ' chars omitted]...\n';
+      return text.slice(0, head) + marker + text.slice(text.length - tail);
     }
 
     /**
@@ -819,6 +1102,7 @@ window.__ModuleLoader__.load({
         calls.set(data.callId, {
           name: typeof data.name === 'string' ? data.name : null,
           path: argumentPath(data.arguments),
+          args: argumentSummary(data.arguments),
         });
       }
 
@@ -896,6 +1180,10 @@ window.__ModuleLoader__.load({
           ) {
             continue;
           }
+          // The runtime reports a tool failure as a bare {name, code}; the human
+          // sentence lives in the result message, so it has to travel with the
+          // raw payload or "send the full raw" would hand over an empty error.
+          const detailText = stripToolHints(explicit !== '' ? explicit : resultText(data));
           const record = {
             id: 'tool:' + String(event.seq),
             seq,
@@ -905,9 +1193,20 @@ window.__ModuleLoader__.load({
             at,
             tool,
             path,
+            args: call !== undefined ? call.args : null,
             code: codeOf(error),
-            detail: stripToolHints(explicit !== '' ? explicit : resultText(data)),
-            raw: truncate(safeJson({ tool, path, callId, error }), 8000),
+            detail: detailText,
+            raw: truncate(
+              safeJson({
+                tool,
+                path,
+                args: call !== undefined ? call.args : null,
+                callId,
+                error,
+                message: detailText,
+              }),
+              8000,
+            ),
           };
           record.message = describeError(record);
           records.push(record);
@@ -994,6 +1293,15 @@ window.__ModuleLoader__.load({
      * newest copy and counts the rest.
      */
     function groupKey(record) {
+      const cause = causeKeyOf(record);
+      if (cause !== null) {
+        return [
+          record.source,
+          cause,
+          record.tool === null ? '' : String(record.tool),
+          record.path === null ? '' : String(record.path),
+        ].join(String.fromCharCode(1));
+      }
       return [
         record.source,
         record.code === null ? '' : String(record.code),
@@ -1075,7 +1383,7 @@ window.__ModuleLoader__.load({
 
     const CSS = `
 .emx-root { display: flex; flex-direction: column; height: 100%; min-height: 0; color: var(--dsw-alias-label-primary); font-size: 13px; line-height: 20px; }
-.emx-head { display: flex; align-items: baseline; gap: 8px; padding: 12px 14px 8px; flex: none; }
+.emx-head { display: flex; flex-wrap: wrap; align-items: baseline; gap: 8px; row-gap: 4px; padding: 12px 14px 8px; flex: none; }
 .emx-headTitle { font-weight: 600; font-size: 13px; }
 .emx-headMeta { color: var(--dsw-alias-label-tertiary); font-size: 12px; }
 .emx-banner { position: sticky; top: 0; z-index: 1; margin: 0 14px 10px; padding: 8px 10px; border-radius: var(--dsw-radius-md); border: 1px solid var(--dsw-alias-state-error-primary); background-color: var(--dsw-alias-bg-base); background-image: linear-gradient(color-mix(in srgb, var(--dsw-alias-state-error-primary) 12%, transparent), color-mix(in srgb, var(--dsw-alias-state-error-primary) 12%, transparent)); display: flex; align-items: center; gap: 8px; flex: none; }
@@ -1084,6 +1392,7 @@ window.__ModuleLoader__.load({
 .emx-list { flex: 1; min-height: 0; overflow: auto; padding: 0 14px 14px; display: flex; flex-direction: column; gap: 8px; }
 .emx-card { border: 1px solid var(--dsw-alias-border-l2); border-radius: var(--dsw-radius-md); background: var(--dsw-alias-bg-module-platform); padding: 10px 12px; display: flex; flex-direction: column; gap: 6px; }
 .emx-cardNew { border-color: var(--dsw-alias-state-error-primary); box-shadow: 0 0 0 1px color-mix(in srgb, var(--dsw-alias-state-error-primary) 40%, transparent); }
+.emx-cardResolved { opacity: 0.72; border-style: dashed; }
 .emx-row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
 .emx-badge { font-size: 11px; line-height: 16px; padding: 1px 6px; border-radius: 999px; border: 1px solid var(--dsw-alias-border-l3); color: var(--dsw-alias-label-secondary); }
 .emx-badgeError { border-color: var(--dsw-alias-state-error-primary); color: var(--dsw-alias-state-error-primary); }
@@ -1092,14 +1401,22 @@ window.__ModuleLoader__.load({
 .emx-filters { display: flex; align-items: center; gap: 6px; padding: 0 14px 8px; flex-wrap: wrap; flex: none; }
 .emx-search { flex: 1 1 140px; min-width: 120px; max-width: 220px; padding: 3px 8px; border: 1px solid var(--dsw-alias-border-l2); border-radius: var(--dsw-radius-md); background: var(--dsw-alias-bg-base); color: inherit; font: inherit; font-size: 12px; line-height: 18px; }
 .emx-search:focus { outline: none; border-color: var(--dsw-alias-border-l3); }
+.emx-docsTrigger { flex: none; }
+.emx-docsPanel { flex: none; display: grid; gap: 1px; max-height: 268px; overflow: auto; padding: 2px 14px 10px; border-bottom: 1px solid var(--dsw-alias-border-l1); }
+.emx-docsGroup { padding: 6px 0 2px; color: var(--dsw-alias-label-tertiary); font-size: 10px; line-height: 14px; letter-spacing: 0.06em; text-transform: uppercase; }
+.emx-docRow { display: grid; grid-template-columns: 84px 1fr; gap: 10px; padding: 2px 0; font-size: 12px; line-height: 17px; }
+.emx-docName { color: var(--dsw-alias-label-primary); }
+.emx-docText { color: var(--dsw-alias-label-secondary); }
 .emx-searchTip { padding: 0 14px 6px; color: var(--dsw-alias-label-tertiary); font-size: 11px; line-height: 16px; flex: none; }
 .emx-chip { font: inherit; font-size: 11px; line-height: 16px; padding: 2px 8px; border-radius: 999px; border: 1px solid var(--dsw-alias-border-l2); background: transparent; color: var(--dsw-alias-label-tertiary); cursor: pointer; }
 .emx-chip:hover { border-color: var(--dsw-alias-border-l3); color: var(--dsw-alias-label-primary); }
 .emx-chipActive { border-color: var(--dsw-alias-state-error-primary); color: var(--dsw-alias-state-error-primary); }
 .emx-badgeCount { border-color: var(--dsw-alias-state-error-primary); color: var(--dsw-alias-state-error-primary); }
+.emx-badgeResolved { border-color: var(--dsw-alias-state-success-primary); color: var(--dsw-alias-state-success-primary); }
 .emx-metaSpacer { flex: 1; }
 .emx-message { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 12px; line-height: 18px; color: var(--dsw-alias-label-primary); white-space: pre-wrap; word-break: break-word; background: var(--dsw-alias-bg-base); border: 1px solid var(--dsw-alias-border-l1); border-radius: var(--dsw-radius-sm); padding: 6px 8px; max-height: 132px; overflow: auto; }
 .emx-cause { font-size: 12px; line-height: 18px; color: var(--dsw-alias-label-secondary); padding-left: 8px; border-left: 2px solid var(--dsw-alias-state-error-primary); }
+.emx-args { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 12px; line-height: 18px; color: var(--dsw-alias-label-secondary); white-space: pre-wrap; word-break: break-word; padding: 0 8px; max-height: 76px; overflow: auto; }
 .emx-scale { color: var(--dsw-alias-label-tertiary); font-size: 12px; }
 .emx-rawToggle { align-self: flex-start; background: none; border: none; padding: 0; color: var(--dsw-alias-label-secondary); font-size: 12px; cursor: pointer; }
 .emx-rawToggle:hover { color: var(--dsw-alias-label-primary); }
@@ -1141,7 +1458,13 @@ window.__ModuleLoader__.load({
       const slots = ctx.slots;
 
       function ErrorItem(props) {
-        const { record, t, isNew, session, onHandled } = props;
+        const { record, t, isNew, session, onHandled, sessionId, resolved, onResolve, onUnresolve } = props;
+        const sessionRef =
+          typeof sessionId === 'string' && sessionId !== ''
+            ? sessionId
+            : session !== undefined && typeof session.id === 'string'
+              ? session.id
+              : '';
         const [open, setOpen] = useState(false);
         const [copyState, setCopyState] = useState('');
         const [sendState, setSendState] = useState('');
@@ -1182,12 +1505,15 @@ window.__ModuleLoader__.load({
             : t('item.scaleNoCache', { tokens, input: formatCount(usage.input) });
         }, [record.usage, t]);
 
-        const causeText = useMemo(() => {
-          const key = explainFailure(
-            [record.detail, record.message, record.code === null ? '' : String(record.code)].join('\n'),
-          );
-          return key === null ? '' : t(key);
-        }, [record.detail, record.message, record.code, t]);
+        // Attribution reads the whole raw payload, not just the visible summary.
+        const causeKey = useMemo(() => causeKeyOf(record), [record]);
+        const causeText = causeKey === null ? '' : t(causeKey);
+
+        // The arguments the call was made with are the scene of the failure.
+        const argsText =
+          typeof record.args === 'string' && record.args !== ''
+            ? t('item.args', { args: record.args })
+            : '';
 
         const detail = useMemo(() => {
           const lines = ['[' + label + ']'];
@@ -1195,6 +1521,7 @@ window.__ModuleLoader__.load({
           if (timeText !== '') lines.push(timeText);
           if (record.code !== null) lines.push(t('item.code', { code: record.code }));
           if (causeText !== '') lines.push(t('item.cause', { cause: causeText }));
+          if (argsText !== '') lines.push(argsText);
           if (scaleText !== '') lines.push(scaleText);
           if (repeats) {
             // A failure repeating dozens of times would make this line run for
@@ -1210,7 +1537,7 @@ window.__ModuleLoader__.load({
           // Copying is free, so the clipboard always carries the complete raw error.
           lines.push(record.raw);
           return lines.join('\n');
-        }, [label, turnText, timeText, record.code, causeText, scaleText, record.raw, record.seq, repeats, record.seqs, t]);
+        }, [label, turnText, timeText, record.code, causeText, argsText, scaleText, record.raw, record.seq, repeats, record.seqs, t]);
 
         const onCopy = useCallback(async () => {
           try {
@@ -1242,8 +1569,12 @@ window.__ModuleLoader__.load({
               turn: record.turn === null ? t('send.unknown') : t('send.turn', { n: String(record.turn) }),
               time: timeText === '' ? t('send.unknown') : timeText,
               code: record.code === null ? t('send.unknown') : record.code,
+              tool: record.tool === null ? t('send.unknown') : record.tool,
               summary,
               seq: String(record.seq),
+              cause: causeKey === null ? t('cause.unknown') : causeText,
+              args: argsText === '' ? t('send.unknown') : record.args,
+              sessionId: sessionRef,
               ...extra,
             });
             try {
@@ -1258,7 +1589,7 @@ window.__ModuleLoader__.load({
             if (timer.current !== null) window.clearTimeout(timer.current);
             timer.current = window.setTimeout(() => setSendState(''), 3200);
           },
-          [session, label, record.turn, record.code, record.seq, timeText, summary, t],
+          [session, label, record.turn, record.code, record.tool, record.seq, timeText, summary, causeKey, causeText, argsText, record.args, sessionRef, t],
         );
 
         const onSend = useCallback(
@@ -1269,6 +1600,21 @@ window.__ModuleLoader__.load({
           () => sendPrompt('send.promptFull', { raw: truncate(record.raw, 4000) }),
           [sendPrompt, record.raw],
         );
+        // A retry is the narrow loop: same tool, same arguments, one step — the
+        // agent gets that scene, not the whole failure history again.
+        const onRetry = useCallback(
+          () => sendPrompt('send.retry', {}),
+          [sendPrompt],
+        );
+        // The mark hangs off the group key, so every repeat of this cause follows.
+        const onToggleResolved = useCallback(() => {
+          const key = groupKey(record);
+          if (resolved) {
+            if (typeof onUnresolve === 'function') onUnresolve(key);
+          } else {
+            if (typeof onResolve === 'function') onResolve(key, record.seq);
+          }
+        }, [resolved, onResolve, onUnresolve, record]);
 
         const statusText =
           sendState === 'sending'
@@ -1281,11 +1627,12 @@ window.__ModuleLoader__.load({
 
         return h(
           'article',
-          { className: 'emx-card' + (isNew ? ' emx-cardNew' : '') },
+          { className: 'emx-card' + (isNew ? ' emx-cardNew' : '') + (resolved ? ' emx-cardResolved' : '') },
           h(
             'div',
             { className: 'emx-row' },
             h('span', { className: 'emx-badge emx-badgeError' }, label),
+            resolved ? h('span', { className: 'emx-badge emx-badgeResolved' }, t('item.resolved')) : null,
             repeats ? h('span', { className: 'emx-badge emx-badgeCount' }, '×' + String(record.count)) : null,
             record.tool === null ? null : h('span', { className: 'emx-badge' }, record.tool),
             h('span', { className: 'emx-badge' }, turnText),
@@ -1307,6 +1654,7 @@ window.__ModuleLoader__.load({
           causeText === ''
             ? null
             : h('div', { className: 'emx-cause' }, t('item.cause', { cause: causeText })),
+          argsText === '' ? null : h('div', { className: 'emx-args' }, argsText),
           scaleText === '' ? null : h('div', { className: 'emx-scale' }, scaleText),
           h(
             'button',
@@ -1337,6 +1685,22 @@ window.__ModuleLoader__.load({
             ),
             h(
               'button',
+              {
+                type: 'button',
+                className: 'emx-btn',
+                onClick: onRetry,
+                disabled: session === undefined || sendState === 'sending',
+                title: t('item.retry'),
+              },
+              t('item.retry'),
+            ),
+            h(
+              'button',
+              { type: 'button', className: 'emx-btn emx-btnQuiet', onClick: onToggleResolved },
+              resolved ? t('item.unresolve') : t('item.resolve'),
+            ),
+            h(
+              'button',
               { type: 'button', className: 'emx-btn emx-btnQuiet emx-btnEnd', onClick: onSendFull, disabled: session === undefined || sendState === 'sending' },
               t('item.sendFull'),
             ),
@@ -1344,6 +1708,27 @@ window.__ModuleLoader__.load({
               ? null
               : h('span', { className: 'emx-state' + (sendState === 'failed' ? ' emx-stateError' : '') }, statusText),
           ),
+        );
+      }
+
+      function DocsBody(props) {
+        const t = props.t;
+        const cardKeys = ['copy', 'send', 'retry', 'resolve', 'full'];
+        const barKeys = ['report', 'search', 'source', 'unresolved', 'unread', 'markAll', 'loadOlder'];
+        const row = (section, key) =>
+          h(
+            'div',
+            { key: section + '.' + key, className: 'emx-docRow' },
+            h('span', { className: 'emx-docName' }, t('docs.' + key + '.name')),
+            h('span', { className: 'emx-docText' }, t('docs.' + key + '.desc')),
+          );
+        return h(
+          'div',
+          { className: 'emx-docsPanel' },
+          h('div', { className: 'emx-docsGroup' }, t('docs.groupCard')),
+          cardKeys.map((key) => row('card', key)),
+          h('div', { className: 'emx-docsGroup' }, t('docs.groupBar')),
+          barKeys.map((key) => row('bar', key)),
         );
       }
 
@@ -1366,6 +1751,10 @@ window.__ModuleLoader__.load({
         const grouped = useMemo(() => groupRecords(records), [records]);
         const [sourceFilter, setSourceFilter] = useState('all');
         const [unreadOnly, setUnreadOnly] = useState(false);
+        // The resolved marks ride the group key, so one click covers every repeat
+        // of the same root cause and survives a restart.
+        const resolvedMap = useResolvedMap(sessionId);
+        const [hideResolved, setHideResolved] = useState(false);
         const [query, setQuery] = useState('');
         // One click hands the current (filtered) view to the clipboard as a
         // Markdown report a fresh session can digest.
@@ -1374,12 +1763,26 @@ window.__ModuleLoader__.load({
         // A very long session must not mount hundreds of raw-carrying cards at
         // once; the list renders a window and grows one notch per click.
         const [renderLimit, setRenderLimit] = useState(50);
+        const [docsOpen, setDocsOpen] = useState(false);
         const counts = useMemo(() => {
           const map = new Map();
           for (const group of grouped) map.set(group.source, (map.get(group.source) ?? 0) + 1);
           return map;
         }, [grouped]);
         const needle = query.trim().toLowerCase();
+        const resolvedCount = useMemo(
+          () => grouped.reduce((sum, group) => (resolvedMap[groupKey(group)] === undefined ? sum : sum + 1), 0),
+          [grouped, resolvedMap],
+        );
+        const onResolve = useCallback(
+          (key, seq) => {
+            markResolved(sessionId, key, Date.now());
+            // Declaring a failure fixed is also a statement that it was read.
+            if (typeof markReadThrough === 'function' && typeof seq === 'number') markReadThrough(seq);
+          },
+          [sessionId, markReadThrough],
+        );
+        const onUnresolve = useCallback((key) => unmarkResolved(sessionId, key), [sessionId]);
         // Space-separated keywords AND together, so "edit sandbox" requires both
         // to hit — a keyword may land on a different field than another.
         const needles = needle === '' ? [] : needle.split(/\s+/);
@@ -1388,13 +1791,14 @@ window.__ModuleLoader__.load({
             grouped.filter((group) => {
               if (sourceFilter !== 'all' && group.source !== sourceFilter) return false;
               if (unreadOnly && !(seen !== null && group.seq > seen)) return false;
+              if (hideResolved && resolvedMap[groupKey(group)] !== undefined) return false;
               if (needles.length > 0) {
                 // The keywords match any of: human-readable message, complete raw
                 // error text, tool name, file path, error code — every keyword must
                 // hit at least one field, and different keywords may hit different
                 // fields. Case-insensitive; combines with the source and unread
                 // filters above.
-                const haystack = [group.message, group.raw, group.tool, group.path, group.code]
+                const haystack = [group.message, group.raw, group.tool, group.path, group.code, group.args]
                   .filter((part) => part !== null && part !== undefined && part !== '')
                   .join(' ')
                   .toLowerCase();
@@ -1402,7 +1806,7 @@ window.__ModuleLoader__.load({
               }
               return true;
             }),
-          [grouped, sourceFilter, unreadOnly, seen, needles],
+          [grouped, sourceFilter, unreadOnly, seen, needles, hideResolved, resolvedMap],
         );
         const onCopyReport = useCallback(async () => {
           const parts = [];
@@ -1428,6 +1832,14 @@ window.__ModuleLoader__.load({
               (repeats ? ' ×' + String(group.count) : '');
             parts.push('', '## ' + heading);
             if (group.message !== '') parts.push(group.message);
+            const groupCause = causeKeyOf(group);
+            if (groupCause !== null) parts.push('- ' + t('item.cause', { cause: t(groupCause) }));
+            // The report is handed to a fresh session, so a mark the user already
+            // made must travel with it — otherwise the agent re-diagnoses a fix.
+            if (resolvedMap[groupKey(group)] !== undefined) parts.push('- ' + t('item.resolved'));
+            if (typeof group.args === 'string' && group.args !== '') {
+              parts.push('- ' + t('item.args', { args: group.args }));
+            }
             if (group.turn !== null && group.turn !== undefined) parts.push('- ' + t('item.turn', { n: String(group.turn) }));
             const latest = formatTime(group.at);
             if (latest !== '') parts.push('- ' + t('item.latest', { time: latest }));
@@ -1457,7 +1869,7 @@ window.__ModuleLoader__.load({
           }
           if (reportTimer.current !== null) window.clearTimeout(reportTimer.current);
           reportTimer.current = window.setTimeout(() => setReportState(''), 2200);
-        }, [visible, t]);
+        }, [visible, t, resolvedMap]);
 
         if (session === undefined) {
           return h(
@@ -1494,7 +1906,19 @@ window.__ModuleLoader__.load({
               },
               reportState === '' ? t('report.copy') : reportState,
             ),
+            h(
+              'button',
+              {
+                type: 'button',
+                className: 'emx-btn emx-btnQuiet emx-docsTrigger',
+                onClick: () => setDocsOpen((value) => !value),
+                'aria-expanded': docsOpen,
+                title: t('docs.toggleHint'),
+              },
+              (docsOpen ? '▾ ' : '▸ ') + t('docs.toggle'),
+            ),
           ),
+          docsOpen ? h(DocsBody, { t }) : null,
           h(
             'div',
             { className: 'emx-filters' },
@@ -1530,6 +1954,21 @@ window.__ModuleLoader__.load({
               );
             }),
             h('span', { className: 'emx-metaSpacer' }),
+            // Only meaningful once something is marked. It hides the whole group,
+            // never the unread count above: a fresh occurrence of the same cause
+            // still raises the banner, which is the point of the mark.
+            resolvedCount > 0
+              ? h(
+                  'button',
+                  {
+                    type: 'button',
+                    className: 'emx-chip' + (hideResolved ? ' emx-chipActive' : ''),
+                    onClick: () => setHideResolved((value) => !value),
+                    title: t('filter.unresolvedHint'),
+                  },
+                  t('filter.unresolved') + ' ' + String(resolvedCount),
+                )
+              : null,
             h(
               'button',
               {
@@ -1585,8 +2024,12 @@ window.__ModuleLoader__.load({
                       record,
                       t,
                       session,
+                      sessionId,
                       isNew: seen !== null && record.seq > seen,
                       onHandled: markReadThrough,
+                      resolved: resolvedMap[groupKey(record)] !== undefined,
+                      onResolve,
+                      onUnresolve,
                     }),
                   ),
                   visible.length > renderLimit
