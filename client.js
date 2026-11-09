@@ -87,6 +87,25 @@ window.__ModuleLoader__.load({
         'item.turnUnknown': 'No turn position',
         'item.code': 'Code {code}',
         'item.cause': 'Cause: {cause}',
+        'item.next': 'Suggested fix: {next}',
+        'item.fatal': 'Turn aborted',
+        'item.recover': 'Step failed — you can continue',
+        'next.quota': 'Top up the account or switch route, then rerun this step',
+        'next.rate': 'Wait 30–60s and rerun; repeated hits mean throttling — different arguments will not help',
+        'next.auth': 'Check the API key is valid and points at the profile you meant',
+        'next.forbidden': 'This path or action is outside the current permission — move it into reachable scope, or raise permission for this step only',
+        'next.editmatch': 'Read the file again, then copy the anchor from that fresh read instead of rewriting it from memory',
+        'next.editambig': 'Lengthen the anchor until it appears once (include the surrounding line); do not widen it with replace_all',
+        'next.sandbox': 'Put the file inside the workspace, or rerun this step with escalated permission',
+        'next.denied': 'Confirm the path is inside the allowed scope, then decide whether to escalate',
+        'next.timeout': 'Do less in one step (fewer commands, smaller reads) and rerun',
+        'next.payload': 'The request shape was rejected — fix the arguments, not the model',
+        'next.module': 'The module or import is missing — check the name and that it is installed',
+        'next.coderun': 'Read the failing line in the raw text, fix the code, then rerun — resending the same code will not help',
+        'next.review': 'Apply what the review asked, then resubmit; the same submission will fail again',
+        'next.enoent': 'The path is wrong or the file is gone — list the directory first',
+        'next.net': 'Check network, proxy and VPN, then rerun; stop after repeated failures',
+        'next.default': 'Send this back to the conversation so the model reads the original event, instead of guessing at the arguments',
         'item.args': 'Call arguments: {args}',
         'item.resolved': 'Resolved',
         'item.resolve': 'Mark resolved',
@@ -234,6 +253,25 @@ window.__ModuleLoader__.load({
         'item.turnUnknown': '无轮次位置',
         'item.code': '错误码 {code}',
         'item.cause': '原因：{cause}',
+        'item.next': '处理建议：{next}',
+        'item.fatal': '会话中断',
+        'item.recover': '单步失败，会话可继续',
+        'next.quota': '充值或换一条可用路由，再重跑这一步',
+        'next.rate': '等 30–60 秒再重跑；连续触发就是被限流，换参数没用',
+        'next.auth': '检查 API key 是否有效、是否指向你以为的那个 profile',
+        'next.forbidden': '这个路径或操作超出当前权限：挪到可操作范围内，或只给这一步提权',
+        'next.editmatch': '先重新读文件再改；锚点从刚读到的原文复制，别凭记忆写',
+        'next.editambig': '把锚点加长到只出现一次（带上前后行），别用 replace_all 硬覆盖',
+        'next.sandbox': '把文件放进工作区内，或给这一步提权后重跑',
+        'next.denied': '先确认路径在允许范围内，再决定要不要提权',
+        'next.timeout': '把单步做小一点（少跑几条命令、少读几个文件）再重跑',
+        'next.payload': '请求形状被拒：改参数，不是换模型',
+        'next.module': '模块或引用不存在：核对名字，确认装过',
+        'next.coderun': '看原文里报错的那一行，改代码再重跑；同一份代码重试没用',
+        'next.review': '按审查意见改完再提交；同一份提交还会被拒',
+        'next.enoent': '路径写错或文件没了：先列目录确认',
+        'next.net': '检查网络、代理与 VPN 再重跑；连续失败就先停',
+        'next.default': '点「发回对话」，让模型读原始事件后给定位；别在参数上瞎试',
         'item.args': '调用参数：{args}',
         'item.resolved': '已解决',
         'item.resolve': '标记已解决',
@@ -985,7 +1023,27 @@ window.__ModuleLoader__.load({
      * Host notices that ride along with tool output. They are not part of the
      * failure, so they must not decide what the failure is called.
      */
-    function stripHintNoise(text) {
+    const NEXT_ACTIONS = {
+  'cause.quota': 'next.quota',
+  'cause.rate': 'next.rate',
+  'cause.auth': 'next.auth',
+  'cause.forbidden': 'next.forbidden',
+  'cause.editmatch': 'next.editmatch',
+  'cause.editambig': 'next.editambig',
+  'cause.sandbox': 'next.sandbox',
+  'cause.denied': 'next.denied',
+  'cause.timeout': 'next.timeout',
+  'cause.payload': 'next.payload',
+  'cause.module': 'next.module',
+  'cause.coderun': 'next.coderun',
+  'cause.review': 'next.review',
+  'cause.enoent': 'next.enoent',
+  'cause.dns': 'next.net',
+  'cause.refused': 'next.net',
+  'cause.reset': 'next.net',
+};
+
+function stripHintNoise(text) {
       if (typeof text !== 'string' || text === '') return '';
       return text
         .replace(/\[[^\]]*escalation available[^\]]*\]/gi, ' ')
@@ -1416,6 +1474,9 @@ window.__ModuleLoader__.load({
 .emx-metaSpacer { flex: 1; }
 .emx-message { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 12px; line-height: 18px; color: var(--dsw-alias-label-primary); white-space: pre-wrap; word-break: break-word; background: var(--dsw-alias-bg-base); border: 1px solid var(--dsw-alias-border-l1); border-radius: var(--dsw-radius-sm); padding: 6px 8px; max-height: 132px; overflow: auto; }
 .emx-cause { font-size: 12px; line-height: 18px; color: var(--dsw-alias-label-secondary); padding-left: 8px; border-left: 2px solid var(--dsw-alias-state-error-primary); }
+.emx-next { font-size: 12px; line-height: 18px; color: var(--dsw-alias-label-primary); padding-left: 8px; border-left: 2px solid var(--dsw-alias-state-success-primary); }
+.emx-badgeFatal { border-color: var(--dsw-alias-state-error-primary); color: var(--dsw-alias-state-error-primary); font-weight: 600; }
+.emx-badgeRecover { color: var(--dsw-alias-label-tertiary); }
 .emx-args { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 12px; line-height: 18px; color: var(--dsw-alias-label-secondary); white-space: pre-wrap; word-break: break-word; padding: 0 8px; max-height: 76px; overflow: auto; }
 .emx-scale { color: var(--dsw-alias-label-tertiary); font-size: 12px; }
 .emx-rawToggle { align-self: flex-start; background: none; border: none; padding: 0; color: var(--dsw-alias-label-secondary); font-size: 12px; cursor: pointer; }
@@ -1508,6 +1569,10 @@ window.__ModuleLoader__.load({
         // Attribution reads the whole raw payload, not just the visible summary.
         const causeKey = useMemo(() => causeKeyOf(record), [record]);
         const causeText = causeKey === null ? '' : t(causeKey);
+
+        // A turn error kills the turn; everything else leaves the session usable.
+        const isFatal = record.source === 'turn';
+        const nextText = t((causeKey !== null && NEXT_ACTIONS[causeKey]) || 'next.default');
 
         // The arguments the call was made with are the scene of the failure.
         const argsText =
@@ -1633,6 +1698,11 @@ window.__ModuleLoader__.load({
             { className: 'emx-row' },
             h('span', { className: 'emx-badge emx-badgeError' }, label),
             resolved ? h('span', { className: 'emx-badge emx-badgeResolved' }, t('item.resolved')) : null,
+            h(
+              'span',
+              { className: isFatal ? 'emx-badge emx-badgeFatal' : 'emx-badge emx-badgeRecover' },
+              isFatal ? t('item.fatal') : t('item.recover'),
+            ),
             repeats ? h('span', { className: 'emx-badge emx-badgeCount' }, '×' + String(record.count)) : null,
             record.tool === null ? null : h('span', { className: 'emx-badge' }, record.tool),
             h('span', { className: 'emx-badge' }, turnText),
@@ -1654,6 +1724,7 @@ window.__ModuleLoader__.load({
           causeText === ''
             ? null
             : h('div', { className: 'emx-cause' }, t('item.cause', { cause: causeText })),
+          h('div', { className: 'emx-next' }, t('item.next', { next: nextText })),
           argsText === '' ? null : h('div', { className: 'emx-args' }, argsText),
           scaleText === '' ? null : h('div', { className: 'emx-scale' }, scaleText),
           h(
