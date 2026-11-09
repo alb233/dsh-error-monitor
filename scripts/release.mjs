@@ -133,7 +133,7 @@ if (!yes && !dryRun) {
 }
 
 /* ---- the release itself ---- */
-console.log('\n1/5 copying client.js');
+console.log('\n1/6 copying client.js');
 if (dryRun) console.log('   [dry] copy ' + clientSrc + ' -> client.js');
 else fs.copyFileSync(clientSrc, 'client.js');
 if (copyReadme) {
@@ -142,22 +142,56 @@ if (copyReadme) {
   else fs.copyFileSync(readmeSrc, 'README.md');
 }
 
-console.log('2/5 bumping version to ' + next);
+console.log('2/6 bumping version to ' + next);
 pkg.version = next;
 if (dryRun) console.log('   [dry] write package.json version ' + next);
 else fs.writeFileSync('package.json', JSON.stringify(pkg, null, 2) + '\n');
 
-console.log('3/5 committing');
+console.log('3/6 committing');
 run('git', ['add', '-A']);
 run('git', ['commit', '-m', next + ': release'], { mutating: true });
 
-console.log('4/5 pushing to origin/main');
+console.log('4/6 pushing to origin/main');
 pushWithRetry();
 
-if (flag('no-publish')) {
-  console.log('\n5/5 publishing skipped (--no-publish)');
+/* The GitHub release follows the tag, so the repository and the release never drift. */
+const readmeNotes = (version) => {
+  try {
+    const md = fs.readFileSync('README.md', 'utf8');
+    const i = md.indexOf('### ' + version);
+    if (i < 0) return version;
+    const j = md.indexOf('\n### ', i + 4);
+    const body = md.slice(i, j < 0 ? undefined : j).split('\n').slice(2).join('\n').trim();
+    return body === '' ? version : body;
+  } catch {
+    return version;
+  }
+};
+const tag = next; // existing tags in this repo are bare versions
+console.log('\n5/6 tagging ' + tag + ' and creating the GitHub release');
+if (flag('no-release')) {
+  console.log('   skipped (--no-release)');
+} else if (dryRun) {
+  console.log('   [dry] git tag -a ' + tag + ' && git push origin ' + tag);
+  console.log('   [dry] gh release create ' + tag + ' --notes <README ' + next + ' section>');
 } else {
-  console.log('5/5 publishing to npm');
+  const exists = execFileSync('git', ['tag', '-l', tag], { encoding: 'utf8' }).trim();
+  if (exists === '') run('git', ['tag', '-a', tag, '-m', tag], { mutating: true });
+  else console.log('   tag ' + tag + ' already exists');
+  run('git', ['push', 'origin', tag], {
+    mutating: true,
+    hint: 'GitHub unreachable; the tag is local, push it later with: git push origin ' + tag,
+  });
+  run('gh', ['release', 'create', tag, '--title', tag, '--notes', readmeNotes(next)], {
+    mutating: true,
+    hint: 'gh auth or GitHub unreachable; then create the release by hand for ' + tag,
+  });
+}
+
+if (flag('no-publish')) {
+  console.log('\n6/6 publishing skipped (--no-publish)');
+} else {
+  console.log('6/6 publishing to npm');
   run(NPM, ['publish', '--registry', REGISTRY], {
     mutating: true,
     hint: 'check npm auth with: npm whoami --registry https://registry.npmjs.org',
