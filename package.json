@@ -48,5 +48,9 @@
   "homepage": "https://github.com/alb233/dsh-error-monitor#readme",
   "bugs": {
     "url": "https://github.com/alb233/dsh-error-monitor/issues"
+  },
+  "publishConfig": {
+    "registry": "https://registry.npmjs.org",
+    "access": "public"
   }
 }
