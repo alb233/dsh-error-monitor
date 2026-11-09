@@ -171,5 +171,9 @@ if (flag('no-publish')) {
   }
 }
 
-console.log('\nDONE  ' + PKG + '@' + next);
+console.log(
+  dryRun
+    ? '\nDRY RUN — nothing was copied, committed, pushed or published'
+    : '\nDONE  ' + PKG + '@' + next,
+);
 console.log('install: dsh plugin add ' + PKG + '@' + next + '   (desktop: fully quit and restart DSH)');
