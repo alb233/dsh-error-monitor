@@ -34,7 +34,19 @@ window.__ModuleLoader__.load({
         'banner.latest': 'Latest error',
         'filter.all': 'All',
         'filter.unread': 'Unread only',
+        'filter.markAll': 'Mark all read',
+        'filter.search': 'Filter…',
+        'filter.searchHint': 'Matches any of: message, raw error, tool name, path, error code. Space-separated keywords must all match.',
         'filter.empty': 'No failures match this filter',
+        'time.now': 'just now',
+        'time.min': '{n} min ago',
+        'time.hour': '{n} h ago',
+        'time.day': '{n} d ago',
+        'report.copy': 'Copy as Markdown',
+        'report.copied': 'Report copied',
+        'report.title': 'Session failure report',
+        'report.exported': 'Exported {time}',
+        'report.count': '{groups} groups / {records} failures',
         'item.source.turn': 'Turn error',
         'item.source.tool': 'Tool failure',
         'item.source.command': 'Command failed',
@@ -85,6 +97,7 @@ window.__ModuleLoader__.load({
         'item.scale': 'Last request ≈ {tokens} tokens ({input} in · {cache} cached)',
         'item.scaleNoCache': 'Last request ≈ {tokens} tokens ({input} in)',
         'item.since': 'first {time}',
+        'item.latest': 'latest {time}',
         'item.seqs': 'seqs={seqs}',
         'item.raw': 'Raw error',
         'item.copy': 'Copy details',
@@ -125,7 +138,19 @@ window.__ModuleLoader__.load({
         'banner.latest': '最新报错',
         'filter.all': '全部',
         'filter.unread': '只看未读',
+        'filter.markAll': '全部已读',
+        'filter.search': '过滤报错…',
+        'filter.searchHint': '可匹配：错误文案、完整原文、工具名、路径、错误码；空格分隔多个关键词，需同时满足',
         'filter.empty': '没有符合筛选的报错',
+        'time.now': '刚刚',
+        'time.min': '{n} 分钟前',
+        'time.hour': '{n} 小时前',
+        'time.day': '{n} 天前',
+        'report.copy': '复制 Markdown 报告',
+        'report.copied': '报告已复制',
+        'report.title': '会话报错报告',
+        'report.exported': '导出时间 {time}',
+        'report.count': '{groups} 组 / {records} 条',
         'item.source.turn': '回合错误',
         'item.source.tool': '工具失败',
         'item.source.command': '命令失败',
@@ -176,6 +201,7 @@ window.__ModuleLoader__.load({
         'item.scale': '最近一次请求 ≈ {tokens} tokens（输入 {input} · 缓存 {cache}）',
         'item.scaleNoCache': '最近一次请求 ≈ {tokens} tokens（输入 {input}）',
         'item.since': '最早 {time}',
+        'item.latest': '最新 {time}',
         'item.seqs': 'seq={seqs}',
         'item.raw': '原始错误',
         'item.copy': '复制详情',
@@ -316,10 +342,45 @@ window.__ModuleLoader__.load({
     function writeNumber(key, value) {
       try {
         window.localStorage.setItem(key, String(value));
+        if (typeof key === 'string' && key.startsWith(SEEN_PREFIX)) touchSeenIndex(key.slice(SEEN_PREFIX.length));
       } catch {
         /* storage unavailable: the panel keeps working, only the watermark resets */
       }
       for (const listener of seenListeners) listener();
+    }
+
+    /**
+     * Seen watermarks live forever otherwise; an insertion-order index keeps only
+     * the most recent sessions and evicts the rest. The index itself is storage
+     * hygiene: losing it only delays future eviction.
+     */
+    const SEEN_INDEX_KEY = PACKAGE + '.seen.index';
+    const SEEN_CAP = 200;
+
+    function touchSeenIndex(sessionId) {
+      try {
+        let order = [];
+        try {
+          const raw = window.localStorage.getItem(SEEN_INDEX_KEY);
+          const parsed = raw === null ? [] : JSON.parse(raw);
+          if (Array.isArray(parsed)) order = parsed.filter((id) => typeof id === 'string');
+        } catch {
+          /* a broken index just loses the ordering, not the watermarks */
+        }
+        order = order.filter((id) => id !== sessionId);
+        order.unshift(sessionId);
+        while (order.length > SEEN_CAP) {
+          const evicted = order.pop();
+          try {
+            window.localStorage.removeItem(SEEN_PREFIX + evicted);
+          } catch {
+            /* eviction is best-effort */
+          }
+        }
+        window.localStorage.setItem(SEEN_INDEX_KEY, JSON.stringify(order));
+      } catch {
+        /* storage unavailable: nothing to prune */
+      }
     }
 
     function useSeenValue(key) {
@@ -827,6 +888,14 @@ window.__ModuleLoader__.load({
           const tool = call !== undefined ? call.name : null;
           const path = call !== undefined ? call.path : null;
           const explicit = typeof error.reason === 'string' && error.reason !== '' ? error.reason : '';
+          // dsh-ops cordis mode reroutes built-in tools (e.g. read -> ops_inspect_local_file);
+          // that is a routing notice, not a real failure, so keep it out of the monitor.
+          if (
+            /\bMODE_REPLACEMENT\b/.test(explicit) ||
+            /cordis mode replaced the official tool/i.test(explicit !== '' ? explicit : resultText(data))
+          ) {
+            continue;
+          }
           const record = {
             id: 'tool:' + String(event.seq),
             seq,
@@ -971,6 +1040,22 @@ window.__ModuleLoader__.load({
       return day + ' ' + clock;
     }
 
+    /**
+     * A spoken distance for hover titles; the card keeps the absolute stamp.
+     */
+    function relTime(at, t) {
+      if (typeof at !== 'number' || !Number.isFinite(at)) return '';
+      const diff = Date.now() - at;
+      if (diff < 0) return '';
+      const minute = 60000;
+      const hour = 60 * minute;
+      const day = 24 * hour;
+      if (diff < minute) return t('time.now');
+      if (diff < hour) return t('time.min', { n: Math.floor(diff / minute) });
+      if (diff < day) return t('time.hour', { n: Math.floor(diff / hour) });
+      return t('time.day', { n: Math.min(99, Math.floor(diff / day)) });
+    }
+
     /** 180346 → '180.3K' so a scale line never wraps the card. */
     function formatTokens(value) {
       if (typeof value !== 'number' || !Number.isFinite(value) || value <= 0) return '';
@@ -1005,6 +1090,9 @@ window.__ModuleLoader__.load({
 .emx-newTag { font-size: 10px; line-height: 14px; padding: 0 5px; border-radius: 999px; background: var(--dsw-alias-state-error-primary); color: var(--dsw-alias-bg-base); font-weight: 600; }
 .emx-meta { color: var(--dsw-alias-label-tertiary); font-size: 12px; }
 .emx-filters { display: flex; align-items: center; gap: 6px; padding: 0 14px 8px; flex-wrap: wrap; flex: none; }
+.emx-search { flex: 1 1 140px; min-width: 120px; max-width: 220px; padding: 3px 8px; border: 1px solid var(--dsw-alias-border-l2); border-radius: var(--dsw-radius-md); background: var(--dsw-alias-bg-base); color: inherit; font: inherit; font-size: 12px; line-height: 18px; }
+.emx-search:focus { outline: none; border-color: var(--dsw-alias-border-l3); }
+.emx-searchTip { padding: 0 14px 6px; color: var(--dsw-alias-label-tertiary); font-size: 11px; line-height: 16px; flex: none; }
 .emx-chip { font: inherit; font-size: 11px; line-height: 16px; padding: 2px 8px; border-radius: 999px; border: 1px solid var(--dsw-alias-border-l2); background: transparent; color: var(--dsw-alias-label-tertiary); cursor: pointer; }
 .emx-chip:hover { border-color: var(--dsw-alias-border-l3); color: var(--dsw-alias-label-primary); }
 .emx-chipActive { border-color: var(--dsw-alias-state-error-primary); color: var(--dsw-alias-state-error-primary); }
@@ -1204,8 +1292,16 @@ window.__ModuleLoader__.load({
             isNew ? h('span', { className: 'emx-newTag' }, t('new.tag')) : null,
             h('span', { className: 'emx-metaSpacer' }),
             record.code !== null ? h('span', { className: 'emx-meta' }, t('item.code', { code: record.code })) : null,
-            firstText !== '' ? h('span', { className: 'emx-meta' }, t('item.since', { time: firstText })) : null,
-            timeText !== '' ? h('time', { className: 'emx-meta' }, timeText) : null,
+            firstText !== ''
+              ? h('span', { className: 'emx-meta', title: relTime(record.firstAt, t) }, t('item.since', { time: firstText }))
+              : null,
+            timeText !== ''
+              ? h(
+                  'time',
+                  { className: 'emx-meta', title: relTime(record.at, t) },
+                  repeats ? t('item.latest', { time: timeText }) : timeText,
+                )
+              : null,
           ),
           h('div', { className: 'emx-message' }, record.message === '' ? record.raw : record.message),
           causeText === ''
@@ -1270,6 +1366,11 @@ window.__ModuleLoader__.load({
         const grouped = useMemo(() => groupRecords(records), [records]);
         const [sourceFilter, setSourceFilter] = useState('all');
         const [unreadOnly, setUnreadOnly] = useState(false);
+        const [query, setQuery] = useState('');
+        // One click hands the current (filtered) view to the clipboard as a
+        // Markdown report a fresh session can digest.
+        const [reportState, setReportState] = useState('');
+        const reportTimer = useRef(null);
         // A very long session must not mount hundreds of raw-carrying cards at
         // once; the list renders a window and grows one notch per click.
         const [renderLimit, setRenderLimit] = useState(50);
@@ -1278,15 +1379,85 @@ window.__ModuleLoader__.load({
           for (const group of grouped) map.set(group.source, (map.get(group.source) ?? 0) + 1);
           return map;
         }, [grouped]);
+        const needle = query.trim().toLowerCase();
+        // Space-separated keywords AND together, so "edit sandbox" requires both
+        // to hit — a keyword may land on a different field than another.
+        const needles = needle === '' ? [] : needle.split(/\s+/);
         const visible = useMemo(
           () =>
             grouped.filter((group) => {
               if (sourceFilter !== 'all' && group.source !== sourceFilter) return false;
               if (unreadOnly && !(seen !== null && group.seq > seen)) return false;
+              if (needles.length > 0) {
+                // The keywords match any of: human-readable message, complete raw
+                // error text, tool name, file path, error code — every keyword must
+                // hit at least one field, and different keywords may hit different
+                // fields. Case-insensitive; combines with the source and unread
+                // filters above.
+                const haystack = [group.message, group.raw, group.tool, group.path, group.code]
+                  .filter((part) => part !== null && part !== undefined && part !== '')
+                  .join(' ')
+                  .toLowerCase();
+                if (!needles.every((keyword) => haystack.includes(keyword))) return false;
+              }
               return true;
             }),
-          [grouped, sourceFilter, unreadOnly, seen],
+          [grouped, sourceFilter, unreadOnly, seen, needles],
         );
+        const onCopyReport = useCallback(async () => {
+          const parts = [];
+          parts.push('# ' + t('report.title'));
+          parts.push('');
+          parts.push(
+            '- ' + t('report.exported', { time: formatTime(Date.now()) }),
+          );
+          parts.push(
+            '- ' +
+              t('report.count', {
+                groups: visible.length,
+                records: visible.reduce((sum, group) => sum + group.count, 0),
+              }),
+          );
+          visible.forEach((group, index) => {
+            const repeats = group.count > 1;
+            const heading =
+              String(index + 1) +
+              '. ' +
+              t('item.source.' + group.source) +
+              (group.code !== null && group.code !== undefined ? ' · ' + group.code : '') +
+              (repeats ? ' ×' + String(group.count) : '');
+            parts.push('', '## ' + heading);
+            if (group.message !== '') parts.push(group.message);
+            if (group.turn !== null && group.turn !== undefined) parts.push('- ' + t('item.turn', { n: String(group.turn) }));
+            const latest = formatTime(group.at);
+            if (latest !== '') parts.push('- ' + t('item.latest', { time: latest }));
+            if (repeats) {
+              const first = formatTime(group.firstAt);
+              if (first !== '') parts.push('- ' + t('item.since', { time: first }));
+              const seqList =
+                group.seqs.length <= 5
+                  ? group.seqs.join(', ')
+                  : group.seqs.slice(0, 5).join(', ') + ' …(' + String(group.seqs.length) + ')';
+              parts.push('- ' + t('item.seqs', { seqs: seqList }));
+            } else {
+              parts.push('- ' + 'seq=' + String(group.seq));
+            }
+            parts.push('', '```', truncate(String(group.raw), 1500), '```');
+          });
+          const report = parts.join('\n');
+          try {
+            if (navigator.clipboard !== undefined && typeof navigator.clipboard.writeText === 'function') {
+              await navigator.clipboard.writeText(report);
+            } else {
+              throw new Error('clipboard unavailable');
+            }
+            setReportState(t('report.copied'));
+          } catch {
+            setReportState(t('item.copyFailed'));
+          }
+          if (reportTimer.current !== null) window.clearTimeout(reportTimer.current);
+          reportTimer.current = window.setTimeout(() => setReportState(''), 2200);
+        }, [visible, t]);
 
         if (session === undefined) {
           return h(
@@ -1313,10 +1484,28 @@ window.__ModuleLoader__.load({
             h('span', { className: 'emx-headMeta' }, t('panel.subtitle')),
             h('span', { className: 'emx-metaSpacer' }),
             h('span', { className: 'emx-headMeta' }, t('panel.total', { n: String(records.length) })),
+            h(
+              'button',
+              {
+                type: 'button',
+                className: 'emx-btn emx-btnQuiet',
+                onClick: onCopyReport,
+                disabled: visible.length === 0,
+              },
+              reportState === '' ? t('report.copy') : reportState,
+            ),
           ),
           h(
             'div',
             { className: 'emx-filters' },
+            h('input', {
+              className: 'emx-search',
+              type: 'search',
+              value: query,
+              placeholder: t('filter.search'),
+              title: t('filter.searchHint'),
+              onChange: (event) => setQuery(event.target.value),
+            }),
             h(
               'button',
               {
@@ -1350,7 +1539,13 @@ window.__ModuleLoader__.load({
               },
               t('filter.unread'),
             ),
+            h(
+              'button',
+              { type: 'button', className: 'emx-chip', onClick: markRead, disabled: unread === 0 },
+              t('filter.markAll'),
+            ),
           ),
+          h('div', { className: 'emx-searchTip' }, t('filter.searchHint')),
           newCount > 0
             ? h(
                 'div',
