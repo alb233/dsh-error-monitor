@@ -43,7 +43,14 @@ const run = (cmd, args, opts = {}) => {
     return '';
   }
   try {
-    return execFileSync(cmd, args, { stdio: opts.quiet ? 'pipe' : 'inherit', encoding: 'utf8' });
+    // npm ships as npm.cmd on Windows, and Node refuses to exec a .cmd without a
+  // shell; passing one command string keeps Node from warning about unescaped args.
+  const npmWin = cmd === NPM && process.platform === 'win32';
+  return execFileSync(npmWin ? [cmd].concat(args).join(' ') : cmd, npmWin ? [] : args, {
+    stdio: opts.quiet ? 'pipe' : 'inherit',
+    encoding: 'utf8',
+    shell: npmWin,
+  });
   } catch {
     die(cmd + ' ' + args.join(' ') + ' failed' + (opts.hint ? ' — ' + opts.hint : ''));
   }
