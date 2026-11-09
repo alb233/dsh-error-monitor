@@ -1,11 +1,11 @@
 window.__ModuleLoader__.load({
-  id: '@dsh-local/view-ad2ab3ad-8a5c-4e88-a7bf-ee0bb5b23776',
+  id: '@alb233/dsh-error-monitor',
   factory(require) {
     const React = require('react');
     const h = React.createElement;
     const { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } = React;
 
-    const PACKAGE = '@dsh-local/view-ad2ab3ad-8a5c-4e88-a7bf-ee0bb5b23776';
+    const PACKAGE = '@alb233/dsh-error-monitor';
     /** View cell id and the key its body registers under. */
     const TAB_TYPE_ID = PACKAGE;
     const SEEN_PREFIX = PACKAGE + '.seen.';
@@ -28,6 +28,7 @@ window.__ModuleLoader__.load({
         'panel.loadOlder': 'Load earlier records',
         'panel.loadingOlder': 'Loading…',
         'panel.hasMore': 'Earlier records are not loaded yet',
+        'panel.showMore': 'Show {n} earlier entries',
         'banner.new': '{n} new since you last looked',
         'banner.markRead': 'Mark as read',
         'banner.latest': 'Latest error',
@@ -42,6 +43,45 @@ window.__ModuleLoader__.load({
         'item.turn': 'Turn {n}',
         'item.turnUnknown': 'No turn position',
         'item.code': 'Code {code}',
+        'item.cause': 'Cause: {cause}',
+        'cause.enoent': 'The path does not exist — the file or directory is misnamed or was never created',
+        'cause.notdir': 'A segment of the path is not a directory',
+        'cause.inuse': 'Another instance already holds this resource — stop it first',
+        'cause.busy': 'The file is locked by another process',
+        'cause.pipe': 'The sandbox blocks named pipes, so piped output cannot be captured',
+        'cause.sandbox': 'The file sandbox rejected this path — it is outside this session’s reach',
+        'cause.denied': 'Permission denied — this account may not read or write that path',
+        'cause.command': 'The command or program to run does not exist',
+        'cause.module': 'A Python module is missing',
+        'cause.refused': 'No service is listening on that port',
+        'cause.timeout': 'The request timed out (slow network or unresponsive peer)',
+        'cause.auth': 'Authentication failed — credentials missing or expired',
+        'cause.forbidden': 'Access denied — this endpoint needs local or higher privilege',
+        'cause.missing': 'The target does not exist',
+        'cause.rate': 'Rate limited — retry later',
+        'cause.quota': 'The model service account is out of balance — top up the account or switch to another route',
+        'cause.nogit': 'The current directory is not a git repository',
+        'cause.syntax': 'Python syntax or indentation error — the interpreter failed before running anything',
+        'cause.traceback': 'Python raised an exception — the last traceback line names the real cause',
+        'cause.encoding': 'Text encoding mismatch — the file is probably not UTF-8 (try GBK/GB18030)',
+        'cause.sqlite': 'SQLite error — usually a locked database, a missing table or a UNIQUE violation',
+        'cause.yaml': 'YAML is malformed — indentation or an unquoted value usually breaks it',
+        'cause.json': 'Invalid JSON — trailing commas, comments or unquoted keys are the usual causes',
+        'cause.eresolve': 'Dependency version conflict (ERESOLVE) — align versions or use --legacy-peer-deps',
+        'cause.npm': 'npm/pnpm failed — the first ERR! line states the real reason',
+        'cause.oom': 'Ran out of memory (RAM or GPU) — reduce the batch or free memory',
+        'cause.cuda': 'CUDA runtime error — check driver, VRAM and torch/cuDNN versions',
+        'cause.port': 'The port is already taken — stop the other process or pick another port',
+        'cause.dns': 'DNS resolution failed — check the hostname and network',
+        'cause.tls': 'TLS/certificate failure — expired, self-signed or untrusted certificate',
+        'cause.payload': 'Request body too large (413)',
+        'cause.gateway': 'Upstream gateway error (502/503/504) — the service behind the proxy is unavailable',
+        'cause.nospace': 'Disk is full',
+        'cause.readonly': 'The file system is read-only',
+        'cause.mfile': 'Too many open files — raise the limit or close handles',
+        'cause.killed': 'The process was killed (exit 137 / SIGKILL) — often OOM or a forced stop',
+        'cause.reset': 'The connection dropped mid-request — network hiccup or the upstream stream died; just retry',
+        'cause.abort': 'The request was aborted before it finished',
         'item.scale': 'Last request ≈ {tokens} tokens ({input} in · {cache} cached)',
         'item.scaleNoCache': 'Last request ≈ {tokens} tokens ({input} in)',
         'item.since': 'first {time}',
@@ -79,6 +119,7 @@ window.__ModuleLoader__.load({
         'panel.loadOlder': '加载更早记录',
         'panel.loadingOlder': '加载中…',
         'panel.hasMore': '更早的记录尚未加载',
+        'panel.showMore': '显示更早的 {n} 条',
         'banner.new': '新报错 {n} 条',
         'banner.markRead': '标记已读',
         'banner.latest': '最新报错',
@@ -93,6 +134,45 @@ window.__ModuleLoader__.load({
         'item.turn': '第 {n} 轮',
         'item.turnUnknown': '无轮次位置',
         'item.code': '错误码 {code}',
+        'item.cause': '原因：{cause}',
+        'cause.enoent': '路径不存在：文件或目录名写错，或该文件尚未创建',
+        'cause.notdir': '路径中有一段不是目录',
+        'cause.inuse': '资源已被另一个实例占用，需先停掉旧实例',
+        'cause.busy': '文件被其他进程锁定',
+        'cause.pipe': '沙箱禁止命名管道，无法捕获子进程输出',
+        'cause.sandbox': '被文件沙箱拒绝：该路径不在本会话可操作范围',
+        'cause.denied': '权限不足：当前账户无权读写该路径',
+        'cause.command': '要执行的命令或程序不存在',
+        'cause.module': '缺少 Python 依赖模块',
+        'cause.refused': '目标端口没有服务在监听',
+        'cause.timeout': '请求超时（网络慢或对端无响应）',
+        'cause.auth': '鉴权失败：凭据缺失或已失效',
+        'cause.forbidden': '权限被拒：该接口需要本机或更高权限',
+        'cause.missing': '目标不存在',
+        'cause.rate': '触发限流，稍后重试',
+        'cause.quota': '模型服务账号余额不足：充值或切换路由',
+        'cause.nogit': '当前目录不是 git 仓库',
+        'cause.syntax': 'Python 语法或缩进错误：解释器在运行前就失败了',
+        'cause.traceback': 'Python 抛了异常：traceback 最后一行（异常类型与消息）通常是根因',
+        'cause.encoding': '文本编码不匹配：文件可能不是 UTF-8，可试 GBK/GB18030',
+        'cause.sqlite': 'SQLite 报错：常见原因是库被占用、表不存在或唯一约束冲突',
+        'cause.yaml': 'YAML 格式有误：缩进或未加引号的值最容易破坏结构',
+        'cause.json': 'JSON 不合法：常见原因是尾逗号、注释或键未加引号',
+        'cause.eresolve': '依赖版本冲突（ERESOLVE）：需要对齐版本或加 --legacy-peer-deps',
+        'cause.npm': 'npm/pnpm 执行失败：第一条 ERR! 行写明具体原因',
+        'cause.oom': '内存不足（内存或显存）：调小批量或先释放内存',
+        'cause.cuda': 'CUDA 运行时报错：检查驱动、显存与 torch/cuDNN 版本',
+        'cause.port': '端口已被占用：停掉占用进程或换端口',
+        'cause.dns': '域名解析失败：检查主机名与网络',
+        'cause.tls': 'TLS/证书失败：证书过期、自签名或不受信任',
+        'cause.payload': '请求体过大（413）',
+        'cause.gateway': '上游网关错误（502/503/504）：代理后面的服务不可用',
+        'cause.nospace': '磁盘空间不足',
+        'cause.readonly': '文件系统只读',
+        'cause.mfile': '打开的文件数超限：提高上限或关闭句柄',
+        'cause.killed': '进程被强杀（exit 137 / SIGKILL）：常见于内存不足或手动终止',
+        'cause.reset': '请求中途连接断开：网络抖动或上游断流，直接重试即可',
+        'cause.abort': '请求在完成前被中止',
         'item.scale': '最近一次请求 ≈ {tokens} tokens（输入 {input} · 缓存 {cache}）',
         'item.scaleNoCache': '最近一次请求 ≈ {tokens} tokens（输入 {input}）',
         'item.since': '最早 {time}',
@@ -188,6 +268,35 @@ window.__ModuleLoader__.load({
     }
 
     /**
+     * Leading-edge throttle with trailing catch-up: the first change lands at
+     * once, further changes inside the window wait, and the timer always flushes
+     * the newest value — so a burst collapses into at most two updates and the
+     * last value is never dropped.
+     */
+    function useThrottledValue(value, delay) {
+      const [state, setState] = useState(value);
+      const latest = useRef(value);
+      const timer = useRef(null);
+      useEffect(() => {
+        latest.current = value;
+        if (timer.current !== null) return undefined;
+        setState(value);
+        timer.current = window.setTimeout(() => {
+          timer.current = null;
+          setState(latest.current);
+        }, delay);
+        return undefined;
+      }, [value, delay]);
+      useEffect(
+        () => () => {
+          if (timer.current !== null) window.clearTimeout(timer.current);
+        },
+        [],
+      );
+      return state;
+    }
+
+    /**
      * The seen watermark is read here and in the header badge, so a write must wake
      * both. localStorage alone gives no cross-component notification.
      */
@@ -246,7 +355,12 @@ window.__ModuleLoader__.load({
       const notice = isRecord(sessionSnapshot) ? sessionSnapshot.lastAgentError : undefined;
       if (typeof notice === 'string' && notice.trim() !== '') {
         const key = String(notice.trim());
-        if (!noticeTimes.has(key)) noticeTimes.set(key, Date.now());
+        // Arrival times live for the page's lifetime; a cap keeps a very long
+        // session from growing the map without bound.
+        if (!noticeTimes.has(key)) {
+          if (noticeTimes.size >= 100) noticeTimes.delete(noticeTimes.keys().next().value);
+          noticeTimes.set(key, Date.now());
+        }
         list = mergeRuntimeNotice(list, key, noticeTimes.get(key));
       }
       return sortRecords(list);
@@ -297,13 +411,23 @@ window.__ModuleLoader__.load({
       const session = sessionOf(sessions, sessionId);
       const entriesSnapshot = useStoreValue(session !== undefined ? session.eventSource : undefined);
       const sessionSnapshot = useStoreValue(session !== undefined ? session : undefined);
-      const records = useMemo(() => collectRecords(entriesSnapshot, sessionSnapshot), [entriesSnapshot, sessionSnapshot]);
+      // Every snapshot change re-runs the full fold; a short merge keeps a run of
+      // failures from recomputing and re-rendering on every single event, while a
+      // lone error still lands immediately (leading edge).
+      const feedInput = useMemo(
+        () => ({ entries: entriesSnapshot, session: sessionSnapshot }),
+        [entriesSnapshot, sessionSnapshot],
+      );
+      const settled = useThrottledValue(feedInput, 200);
+      const records = useMemo(() => collectRecords(settled.entries, settled.session), [settled]);
       const topSeq = records.length === 0 ? 0 : records[0].seq;
       const seenKey = SEEN_PREFIX + String(sessionId);
       const seen = useSeenValue(seenKey);
 
-      // Only the panel that actually shows the list may seed the watermark; a badge
-      // that wrote it on mount would erase the unread state it exists to report.
+      // Seeding happens on first sight of a session with no watermark yet: without
+      // it, installing the plugin (or a fresh storage) would light up every
+      // historical failure of every session as unread. Once seeded, the watermark
+      // is durable, so a restart never re-seeds over a real unread state.
       useEffect(() => {
         if (baseline && seen === null) writeNumber(seenKey, topSeq);
       }, [baseline, seen, seenKey, topSeq]);
@@ -489,6 +613,71 @@ window.__ModuleLoader__.load({
       }
       return null;
     }
+
+    /* --- error causes (start) --- */
+
+    /**
+     * Raw stderr rarely names its own cause: “系统找不到指定的文件。(os error 2)” is a
+     * path problem, but a reader has to know that “2” means ENOENT. This table maps
+     * the recurring signatures onto a locale key, so the card can state the cause in
+     * one plain sentence instead of leaving the reader to decode it. First match
+     * wins; an unrecognised failure gets no cause line rather than a wrong guess.
+     */
+    const CAUSES = [
+      {
+        key: 'cause.enoent',
+        re: /os error 2\b|ENOENT|No such file or directory|no such file|系统找不到指定的文件|找不到指定的文件|The system cannot find the file|FileNotFoundError/i,
+      },
+      { key: 'cause.notdir', re: /os error 3\b|ENOTDIR|不是目录/ },
+      { key: 'cause.inuse', re: /already in use by another|已有另一个|已被占用|being used by another process|另一个程序正在使用/i },
+      { key: 'cause.busy', re: /os error 32\b|EBUSY/ },
+      { key: 'cause.pipe', re: /named pipe|命名管道|EPERM.*pipe|pipe.*EPERM/i },
+      { key: 'cause.sandbox', re: /sandbox: file access denied|\[sandbox:/i },
+      { key: 'cause.denied', re: /os error 5\b|EACCES|EPERM|PermissionError|Permission denied|拒绝访问|Access is denied/i },
+      { key: 'cause.command', re: /command not found|不是内部或外部命令|Executable not found/i },
+      { key: 'cause.module', re: /ModuleNotFoundError|No module named|ModuleNotFound|Cannot find module|ERR_MODULE_NOT_FOUND/i },
+      { key: 'cause.syntax', re: /SyntaxError|IndentationError|TabError/ },
+      { key: 'cause.traceback', re: /Traceback \(most recent call last\)/i },
+      { key: 'cause.encoding', re: /UnicodeDecodeError|UnicodeEncodeError|codec can't decode|codec can't encode|GBK|gb18030/i },
+      { key: 'cause.sqlite', re: /sqlite3\.|no such table|database is locked|UNIQUE constraint failed|OperationalError/i },
+      { key: 'cause.yaml', re: /yaml\.scanner|YAMLException|mapping values are not allowed/i },
+      { key: 'cause.json', re: /EJSONPARSE|JSONDecodeError|Unexpected token .* in JSON|Unexpected end of JSON/i },
+      { key: 'cause.eresolve', re: /ERESOLVE|peer dep/i },
+      { key: 'cause.npm', re: /npm ERR!|pnpm ERR|ELIFECYCLE/i },
+      { key: 'cause.oom', re: /MemoryError|out of memory|CUDA out of memory|OOM/i },
+      { key: 'cause.cuda', re: /CUDA error|no CUDA-capable device|cuDNN|CUBLAS/i },
+      { key: 'cause.refused', re: /ECONNREFUSED|Connection refused|拒绝连接|actively refused/i },
+      { key: 'cause.port', re: /EADDRINUSE|Address already in use|端口.*被占用|10048/i },
+      { key: 'cause.dns', re: /getaddrinfo|ENOTFOUND|could not resolve host|Name or service not known/i },
+      { key: 'cause.tls', re: /CERT_HAS_EXPIRED|certificate verify failed|self.signed certificate|\bSSL\b|\bTLS\b/i },
+      { key: 'cause.timeout', re: /ETIMEDOUT|timed out|timeout|超时/i },
+      { key: 'cause.auth', re: /\b401\b|Unauthorized|authentication required/i },
+      { key: 'cause.forbidden', re: /\b403\b|Forbidden|OWNER_REQUIRED/i },
+      { key: 'cause.missing', re: /\b404\b|Not Found/i },
+      { key: 'cause.payload', re: /\b413\b|Payload Too Large|request entity too large/i },
+      { key: 'cause.gateway', re: /\b50[234]\b|Bad Gateway|Service Unavailable|Gateway Timeout/i },
+      { key: 'cause.quota', re: /ACCOUNT_QUOTA|insufficient balance|insufficient_quota|quota exceeded|billing/i },
+      { key: 'cause.rate', re: /\b429\b|Too Many Requests|rate limit|限流/i },
+      { key: 'cause.nospace', re: /ENOSPC|No space left on device|磁盘空间不足/i },
+      { key: 'cause.readonly', re: /EROFS|read-only file system|只读文件系统/i },
+      { key: 'cause.mfile', re: /EMFILE|too many open files/i },
+      { key: 'cause.killed', re: /exit code 137|SIGKILL|signal: killed/i },
+      {
+        key: 'cause.reset',
+        re: /ECONNRESET|ECONNABORTED|EPIPE|socket hang up|connection reset|fetch failed|unexpected EOF|Empty reply from server|network error/i,
+      },
+      { key: 'cause.abort', re: /\baborted\b|request was aborted|AbortError|operation was canceled|operation cancelled/i },
+      { key: 'cause.nogit', re: /not a git repository/i },
+    ];
+
+    /** The locale key of the most likely cause, or null when nothing matches. */
+    function explainFailure(text) {
+      if (typeof text !== 'string' || text === '') return null;
+      for (const cause of CAUSES) if (cause.re.test(text)) return cause.key;
+      return null;
+    }
+
+    /* --- error causes (end) --- */
 
     /**
      * The single description of one failure, shared by the card and the outgoing
@@ -822,6 +1011,7 @@ window.__ModuleLoader__.load({
 .emx-badgeCount { border-color: var(--dsw-alias-state-error-primary); color: var(--dsw-alias-state-error-primary); }
 .emx-metaSpacer { flex: 1; }
 .emx-message { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 12px; line-height: 18px; color: var(--dsw-alias-label-primary); white-space: pre-wrap; word-break: break-word; background: var(--dsw-alias-bg-base); border: 1px solid var(--dsw-alias-border-l1); border-radius: var(--dsw-radius-sm); padding: 6px 8px; max-height: 132px; overflow: auto; }
+.emx-cause { font-size: 12px; line-height: 18px; color: var(--dsw-alias-label-secondary); padding-left: 8px; border-left: 2px solid var(--dsw-alias-state-error-primary); }
 .emx-scale { color: var(--dsw-alias-label-tertiary); font-size: 12px; }
 .emx-rawToggle { align-self: flex-start; background: none; border: none; padding: 0; color: var(--dsw-alias-label-secondary); font-size: 12px; cursor: pointer; }
 .emx-rawToggle:hover { color: var(--dsw-alias-label-primary); }
@@ -904,19 +1094,35 @@ window.__ModuleLoader__.load({
             : t('item.scaleNoCache', { tokens, input: formatCount(usage.input) });
         }, [record.usage, t]);
 
+        const causeText = useMemo(() => {
+          const key = explainFailure(
+            [record.detail, record.message, record.code === null ? '' : String(record.code)].join('\n'),
+          );
+          return key === null ? '' : t(key);
+        }, [record.detail, record.message, record.code, t]);
+
         const detail = useMemo(() => {
           const lines = ['[' + label + ']'];
           lines.push(turnText);
           if (timeText !== '') lines.push(timeText);
           if (record.code !== null) lines.push(t('item.code', { code: record.code }));
+          if (causeText !== '') lines.push(t('item.cause', { cause: causeText }));
           if (scaleText !== '') lines.push(scaleText);
-          if (repeats) lines.push(t('item.seqs', { seqs: record.seqs.join(', ') }));
+          if (repeats) {
+            // A failure repeating dozens of times would make this line run for
+            // paragraphs; five samples plus the total says as much.
+            const seqList =
+              record.seqs.length <= 5
+                ? record.seqs.join(', ')
+                : record.seqs.slice(0, 5).join(', ') + ' …(' + String(record.seqs.length) + ')';
+            lines.push(t('item.seqs', { seqs: seqList }));
+          }
           else lines.push('seq=' + String(record.seq));
           lines.push('');
           // Copying is free, so the clipboard always carries the complete raw error.
           lines.push(record.raw);
           return lines.join('\n');
-        }, [label, turnText, timeText, record.code, scaleText, record.raw, record.seq, repeats, record.seqs, t]);
+        }, [label, turnText, timeText, record.code, causeText, scaleText, record.raw, record.seq, repeats, record.seqs, t]);
 
         const onCopy = useCallback(async () => {
           try {
@@ -1002,6 +1208,9 @@ window.__ModuleLoader__.load({
             timeText !== '' ? h('time', { className: 'emx-meta' }, timeText) : null,
           ),
           h('div', { className: 'emx-message' }, record.message === '' ? record.raw : record.message),
+          causeText === ''
+            ? null
+            : h('div', { className: 'emx-cause' }, t('item.cause', { cause: causeText })),
           scaleText === '' ? null : h('div', { className: 'emx-scale' }, scaleText),
           h(
             'button',
@@ -1061,6 +1270,9 @@ window.__ModuleLoader__.load({
         const grouped = useMemo(() => groupRecords(records), [records]);
         const [sourceFilter, setSourceFilter] = useState('all');
         const [unreadOnly, setUnreadOnly] = useState(false);
+        // A very long session must not mount hundreds of raw-carrying cards at
+        // once; the list renders a window and grows one notch per click.
+        const [renderLimit, setRenderLimit] = useState(50);
         const counts = useMemo(() => {
           const map = new Map();
           for (const group of grouped) map.set(group.source, (map.get(group.source) ?? 0) + 1);
@@ -1172,7 +1384,7 @@ window.__ModuleLoader__.load({
               : h(
                   'div',
                   { className: 'emx-list' },
-                  visible.map((record) =>
+                  visible.slice(0, renderLimit).map((record) =>
                     h(ErrorItem, {
                       key: record.id,
                       record,
@@ -1182,6 +1394,17 @@ window.__ModuleLoader__.load({
                       onHandled: markReadThrough,
                     }),
                   ),
+                  visible.length > renderLimit
+                    ? h(
+                        'button',
+                        {
+                          type: 'button',
+                          className: 'emx-btn emx-btnQuiet',
+                          onClick: () => setRenderLimit((value) => value + 50),
+                        },
+                        t('panel.showMore', { n: String(visible.length - renderLimit) }),
+                      )
+                    : null,
                 ),
           h('div', { className: 'emx-foot' }, t('panel.windowNote')),
         );
@@ -1252,7 +1475,9 @@ window.__ModuleLoader__.load({
           const locale = normalizeLocale(useActiveLocale(ctx));
           const t = useMemo(() => translator(locale), [locale]);
           const sessionId = typeof props.sessionId === 'string' && props.sessionId !== '' ? props.sessionId : undefined;
-          const { records, unread } = useErrorFeed(ctx, sessionId);
+          // The row seeds the watermark on first sight too, so only failures that
+          // arrive after the user actually saw the session count as unread.
+          const { records, unread } = useErrorFeed(ctx, sessionId, { baseline: true });
           if (unread <= 0 || records.length === 0) return null;
           return h(
             'span',

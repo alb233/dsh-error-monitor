@@ -1,11 +1,11 @@
 {
   "name": "@alb233/dsh-error-monitor",
-  "version": "1.0.1",
+  "version": "1.1.0",
   "type": "module",
   "engines": {
     "dsh": ">=0.2.2-rc.1 <0.3.0-0"
   },
-  "description": "Lists this session's runtime errors (turn errors, tool failures, command failures, subagent failures) as copyable cards inside the conversation view.",
+  "description": "Lists this session's runtime errors (turn errors, tool failures, command failures, subagent failures, runtime notices) as copyable cards in the conversation view, with an unread alert on the sidebar row.",
   "exports": {
     ".": "./index.js",
     "./client": "./client.js",
