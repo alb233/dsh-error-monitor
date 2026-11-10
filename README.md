@@ -2,6 +2,20 @@
 
 一个 DSH Web 插件：把本会话的每一次失败（回合错误、工具失败、命令失败、子智能体异常、运行时通知）作为可复制、可发回对话的卡片，列在「对话 / 上下文 / 编队 / 统计」旁边的 Conversation View 里，让报错在对话现场被读到；同时在侧栏会话行上显示未读告警。
 
+## 演示
+
+![会话报错监控插件演示：一条 429 限流报错从「原因：」到「处理建议：」再到「发回对话」](docs/error-monitor-demo.gif)
+
+10 秒，一条主流程：**报错上屏 → 看懂原因 → 照着处理建议往下走 → 一键发回对话**。画面逐帧复刻当前 UI（中文文案取自 `client.js` 的 `MESSAGES.zh`、配色取自 DSH 深色主题），首帧就是完整卡片，聚焦框按「原始错误 → 原因 → 处理建议：」依次点亮，结尾高亮「发回对话」。
+
+| 文件 | 用途 |
+|---|---|
+| [docs/error-monitor-demo.gif](docs/error-monitor-demo.gif) | 上面的循环动图，720×405，约 2.9 MB |
+| [docs/error-monitor-demo.mp4](docs/error-monitor-demo.mp4) | 高清视频，1280×720，H.264，约 1.9 MB，GitHub 可直接贴 |
+| [docs/error-monitor-demo-poster.png](docs/error-monitor-demo-poster.png) | 首帧静态图，动图加载不出来时的兜底 |
+
+动图演示的是 429 限流这一条归因链路；卡片里的原始错误是拟真的 `429` 信封，其余可见文案均为界面真实字符串。UI 改动后请同步重新生成，别让动图和插件长得不一样。
+
 ## 安装
 
 需要带 Web 客户端的 DSH 版本。可以从插件市场安装，或指向 npm 包、本仓库：
