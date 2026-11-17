@@ -83,6 +83,7 @@ window.__ModuleLoader__.load({
         'item.source.command': 'Command failed',
         'item.source.subagent': 'Subagent failed',
         'item.source.runtime': 'Runtime notice',
+        'item.fromChild': 'From subagent {id}',
         'item.turn': 'Turn {n}',
         'item.turnUnknown': 'No turn position',
         'item.code': 'Code {code}',
@@ -105,6 +106,32 @@ window.__ModuleLoader__.load({
         'next.review': 'Apply what the review asked, then resubmit; the same submission will fail again',
         'next.enoent': 'The path is wrong or the file is gone — list the directory first',
         'next.net': 'Check network, proxy and VPN, then rerun; stop after repeated failures',
+        'next.gateway': 'Upstream gateway failed (5xx) — retry; if it keeps happening the service behind the proxy is down, switch route or wait',
+        'next.jstype': 'Read the first line of the stack trace — it names the undefined variable or wrong type; fix the code and rerun',
+        'next.syntax': 'Fix the syntax or indentation on the reported line, then rerun — the interpreter failed before running',
+        'next.notdir': 'Check each path segment — one component that should be a directory is actually a file',
+        'next.inuse': 'Stop the other instance holding this resource, then rerun',
+        'next.busy': 'Close the process locking this file, then rerun',
+        'next.pipe': 'The sandbox blocks named pipes — use plain redirection or rerun this step with escalated permission',
+        'next.command': 'Check the command spelling and PATH — the executable was not found',
+        'next.encoding': 'Re-decode the file as UTF-8; try GBK/GB18030 if it is legacy Chinese text',
+        'next.sqlite': 'Check for a locked database, a missing table, or a constraint conflict, then fix that specific cause',
+        'next.yaml': 'Check indentation and unquoted values on the reported line',
+        'next.json': 'Check for trailing commas, comments, or unquoted keys',
+        'next.eresolve': 'Align the conflicting dependency versions, or reinstall with --legacy-peer-deps',
+        'next.npm': 'Read the first npm ERR! line — it names the real cause',
+        'next.oom': 'Lower the batch size or free memory/VRAM, then rerun',
+        'next.cuda': 'Check the driver, free VRAM, and confirm torch/cuDNN versions match',
+        'next.port': 'Stop the process on this port or pick a different one',
+        'next.tls': 'Check certificate expiry, the trust chain, and the system clock',
+        'next.nospace': 'Free disk space, then rerun',
+        'next.readonly': 'Write the output to a writable location instead',
+        'next.mfile': 'Close unused file handles or raise the open-file limit',
+        'next.killed': 'Check whether it ran out of memory or was killed manually — reduce the workload',
+        'next.nogit': 'Run git init here first, or point at the correct repository',
+        'next.missing': 'Confirm the URL or resource actually exists',
+        'next.traceback': 'Read the last line of the traceback — the exception type and message there are the root cause',
+        'next.abort': 'Find what cancelled the request, then start it again',
         'next.default': 'Send this back to the conversation so the model reads the original event, instead of guessing at the arguments',
         'item.args': 'Call arguments: {args}',
         'item.resolved': 'Resolved',
@@ -249,6 +276,7 @@ window.__ModuleLoader__.load({
         'item.source.command': '命令失败',
         'item.source.subagent': '子智能体异常',
         'item.source.runtime': '运行时通知',
+        'item.fromChild': '来自子智能体 {id}',
         'item.turn': '第 {n} 轮',
         'item.turnUnknown': '无轮次位置',
         'item.code': '错误码 {code}',
@@ -271,6 +299,32 @@ window.__ModuleLoader__.load({
         'next.review': '按审查意见改完再提交；同一份提交还会被拒',
         'next.enoent': '路径写错或文件没了：先列目录确认',
         'next.net': '检查网络、代理与 VPN 再重跑；连续失败就先停',
+        'next.gateway': '稍后重试；持续 5xx 说明代理后面的服务挂了，换路由或等恢复',
+        'next.jstype': '看栈顶第一行，它点名了未定义变量或用错的类型；改代码再重跑',
+        'next.syntax': '按报错行号修语法或缩进；解释器在运行前就失败了',
+        'next.notdir': '检查路径每一段，把本该是目录的那一段改成目录',
+        'next.inuse': '停掉占用这个资源的旧实例，再重跑',
+        'next.busy': '关掉锁定这个文件的进程，再重跑',
+        'next.pipe': '沙箱禁止命名管道：改用普通重定向，或给这一步提权后重跑',
+        'next.command': '核对命令拼写和 PATH：这个可执行程序没找到',
+        'next.encoding': '按 UTF-8 重新解码；若是老中文文件试 GBK/GB18030',
+        'next.sqlite': '查是库被占用、表不存在还是约束冲突，针对具体原因处理',
+        'next.yaml': '按报错行检查缩进和未加引号的值',
+        'next.json': '检查尾逗号、注释或未加引号的键',
+        'next.eresolve': '对齐冲突的依赖版本，或加 --legacy-peer-deps 重装',
+        'next.npm': '看第一条 npm ERR! 行，它写明了真正原因',
+        'next.oom': '调小批量或先释放内存/显存，再重跑',
+        'next.cuda': '检查驱动、释放显存，确认 torch/cuDNN 版本匹配',
+        'next.port': '停掉占用端口的进程，或换一个端口',
+        'next.tls': '检查证书是否过期、信任链和系统时间',
+        'next.nospace': '清理磁盘空间，再重跑',
+        'next.readonly': '把输出路径换到可写目录',
+        'next.mfile': '关闭多余的文件句柄，或提高打开文件数上限',
+        'next.killed': '查是内存不足还是被手动杀掉，减小任务规模',
+        'next.nogit': '先在这个目录 git init（或指到正确的仓库）',
+        'next.missing': '确认这个地址或资源确实存在',
+        'next.traceback': '读 traceback 最后一行，那里的异常类型和消息通常就是根因',
+        'next.abort': '查清是谁取消了请求，再重新发起',
         'next.default': '点「发回对话」，让模型读原始事件后给定位；别在参数上瞎试',
         'item.args': '调用参数：{args}',
         'item.resolved': '已解决',
@@ -686,11 +740,58 @@ window.__ModuleLoader__.load({
      * One Session's failure feed plus its unread watermark, shared by the View body
      * and the header badge so both agree on what "unread" means.
      */
+    /**
+     * Open a child generation once and fold its own failures into display records.
+     * Children live in separate sessions whose event sequences restart at 1, so the
+     * records are tagged with their child id; ordering uses a separate orderSeq that
+     * the caller derives from the parent's failure notice.
+     */
+    async function readChildRecords(sessions, childId) {
+      if (sessions === undefined || typeof childId !== 'string' || childId === '') return [];
+      try {
+        const address = typeof sessions.subagentAddress === 'function' ? sessions.subagentAddress(childId) : undefined;
+        if (address === undefined) return [];
+        const readEntries = (reference) => {
+          const binding = reference !== undefined && reference.binding !== undefined ? reference.binding : undefined;
+          const eventSource = binding !== undefined ? binding.eventSource : undefined;
+          const snapshot = eventSource !== undefined && typeof eventSource.getSnapshot === 'function'
+            ? eventSource.getSnapshot()
+            : undefined;
+          return isRecord(snapshot) && Array.isArray(snapshot.entries) ? snapshot.entries : [];
+        };
+        let entries;
+        if (typeof sessions.using === 'function') {
+          entries = await sessions.using(address, { source: 'gateway' }, readEntries);
+        } else if (typeof sessions.retain === 'function') {
+          const reference = sessions.retain(address, { source: 'gateway' });
+          try {
+            if (reference !== undefined && reference.ready !== undefined) await reference.ready;
+            entries = readEntries(reference);
+          } finally {
+            if (reference !== undefined && typeof reference.release === 'function') reference.release();
+          }
+        } else {
+          return [];
+        }
+        const list = foldErrors(entries);
+        list.sort((left, right) => right.seq - left.seq);
+        return list.map((record) => {
+          const copy = Object.assign({}, record, { fromChild: true, childId, child: childId });
+          copy.message = describeError(copy);
+          return copy;
+        });
+      } catch {
+        return [];
+      }
+    }
+
     function useErrorFeed(ctx, sessionId, options) {
       const baseline = options !== undefined && options.baseline === true;
       const sessions = safeService(ctx, 'sessions');
+      const sessionsRef = useRef(sessions);
+      sessionsRef.current = sessions;
       // The Session object arrives once the runtime retains its generation.
-      useStoreValue(sessions !== undefined ? sessions.list : undefined);
+      const listSnapshot = useStoreValue(sessions !== undefined ? sessions.list : undefined);
       const session = sessionOf(sessions, sessionId);
       const entriesSnapshot = useStoreValue(session !== undefined ? session.eventSource : undefined);
       const sessionSnapshot = useStoreValue(session !== undefined ? session : undefined);
@@ -717,6 +818,72 @@ window.__ModuleLoader__.load({
 
       const unread = seen === null ? (baseline ? 0 : records.length) : records.filter((record) => record.seq > seen).length;
 
+      // A child generation's errors never reach the parent's live window. Discover
+      // its id from failure notices and from the catalog (workflow children send no
+      // notice), then open each child's eventSource once and fold its own failures.
+      const withChildren = options === undefined || options.children !== false;
+      const childIds = useMemo(() => {
+        if (!withChildren) return [];
+        const found = [];
+        const push = (id) => {
+          if (typeof id === 'string' && id !== '' && found.indexOf(id) === -1) found.push(id);
+        };
+        for (const record of records) {
+          if (record.source === 'subagent' && typeof record.child === 'string') push(record.child);
+        }
+        const byId = isRecord(listSnapshot) && isRecord(listSnapshot.byId) ? listSnapshot.byId : undefined;
+        if (byId !== undefined && typeof sessionId === 'string') {
+          for (const id of Object.keys(byId)) {
+            const row = byId[id];
+            if (isRecord(row) && row.origin === 'subagent' && row.parentId === sessionId) push(id);
+          }
+        }
+        // Notices are the strongest signal, so keep them ahead of a long catalog.
+        return found.slice(0, 25);
+      }, [records, listSnapshot, sessionId, withChildren]);
+      const childIdsKey = childIds.join(String.fromCharCode(1));
+      const childCache = useRef(new Map());
+      const [childRecords, setChildRecords] = useState([]);
+
+      useEffect(() => {
+        let cancelled = false;
+        const ids = childIdsKey === '' ? [] : childIdsKey.split(String.fromCharCode(1));
+        const run = async () => {
+          const current = sessionsRef.current;
+          const cache = childCache.current;
+          let missing = false;
+          for (const id of ids) {
+            if (!cache.has(id)) { missing = true; break; }
+          }
+          if (missing) {
+            const next = new Map(cache);
+            for (const id of ids) {
+              if (next.has(id)) continue;
+              next.set(id, await readChildRecords(current, id));
+              if (cancelled) return;
+            }
+            childCache.current = next;
+          }
+          if (cancelled) return;
+          const merged = [];
+          for (const id of ids) {
+            const found = childCache.current.get(id);
+            if (!found) continue;
+            let noticeSeq = 0;
+            for (const record of records) {
+              if (record.source === 'subagent' && record.child === id && Number.isFinite(record.seq) && record.seq > noticeSeq) noticeSeq = record.seq;
+            }
+            const base = noticeSeq > 0 ? noticeSeq : topSeq;
+            for (let i = 0; i < found.length; i += 1) {
+              merged.push(Object.assign({}, found[i], { orderSeq: base - 0.01 - i * 0.0001 }));
+            }
+          }
+          setChildRecords(merged);
+        };
+        void run();
+        return () => { cancelled = true; };
+      }, [childIdsKey, records, topSeq]);
+
       // Reading one failure is not reading the newer ones, so the watermark only
       // moves up to that record.
       const markReadThrough = useCallback(
@@ -740,6 +907,7 @@ window.__ModuleLoader__.load({
       return {
         session,
         records,
+        childRecords,
         topSeq,
         seen,
         unread,
@@ -1041,6 +1209,32 @@ window.__ModuleLoader__.load({
   'cause.dns': 'next.net',
   'cause.refused': 'next.net',
   'cause.reset': 'next.net',
+  'cause.gateway': 'next.gateway',
+  'cause.jstype': 'next.jstype',
+  'cause.syntax': 'next.syntax',
+  'cause.notdir': 'next.notdir',
+  'cause.inuse': 'next.inuse',
+  'cause.busy': 'next.busy',
+  'cause.pipe': 'next.pipe',
+  'cause.command': 'next.command',
+  'cause.encoding': 'next.encoding',
+  'cause.sqlite': 'next.sqlite',
+  'cause.yaml': 'next.yaml',
+  'cause.json': 'next.json',
+  'cause.eresolve': 'next.eresolve',
+  'cause.npm': 'next.npm',
+  'cause.oom': 'next.oom',
+  'cause.cuda': 'next.cuda',
+  'cause.port': 'next.port',
+  'cause.tls': 'next.tls',
+  'cause.nospace': 'next.nospace',
+  'cause.readonly': 'next.readonly',
+  'cause.mfile': 'next.mfile',
+  'cause.killed': 'next.killed',
+  'cause.nogit': 'next.nogit',
+  'cause.missing': 'next.missing',
+  'cause.traceback': 'next.traceback',
+  'cause.abort': 'next.abort',
 };
 
 function stripHintNoise(text) {
@@ -1342,7 +1536,11 @@ function stripHintNoise(text) {
     }
 
     function sortRecords(records) {
-      return records.slice().sort((left, right) => right.seq - left.seq);
+      return records.slice().sort((left, right) => {
+        const l = typeof left.orderSeq === 'number' ? left.orderSeq : left.seq;
+        const r = typeof right.orderSeq === 'number' ? right.orderSeq : right.seq;
+        return r - l;
+      });
     }
 
     /**
@@ -1351,22 +1549,26 @@ function stripHintNoise(text) {
      * newest copy and counts the rest.
      */
     function groupKey(record) {
+      // Child records carry their own sequence space; prefixing the key keeps two
+      // children with the same failure from collapsing into one group. Parent keys
+      // stay byte-for-byte identical so saved resolved marks keep working.
+      const child = record.childId === undefined || record.childId === '' ? '' : String(record.childId) + String.fromCharCode(1);
       const cause = causeKeyOf(record);
       if (cause !== null) {
-        return [
+        return child + [
           record.source,
           cause,
           record.tool === null ? '' : String(record.tool),
           record.path === null ? '' : String(record.path),
         ].join(String.fromCharCode(1));
       }
-      return [
+      return child + [
         record.source,
         record.code === null ? '' : String(record.code),
         record.tool === null ? '' : String(record.tool),
         record.path === null ? '' : String(record.path),
         record.message,
-      ].join('\u0001');
+      ].join(String.fromCharCode(1));
     }
 
     function groupRecords(records) {
@@ -1521,11 +1723,13 @@ function stripHintNoise(text) {
       function ErrorItem(props) {
         const { record, t, isNew, session, onHandled, sessionId, resolved, onResolve, onUnresolve } = props;
         const sessionRef =
-          typeof sessionId === 'string' && sessionId !== ''
-            ? sessionId
-            : session !== undefined && typeof session.id === 'string'
-              ? session.id
-              : '';
+          typeof record.childId === 'string' && record.childId !== ''
+            ? record.childId
+            : typeof sessionId === 'string' && sessionId !== ''
+              ? sessionId
+              : session !== undefined && typeof session.id === 'string'
+                ? session.id
+                : '';
         const [open, setOpen] = useState(false);
         const [copyState, setCopyState] = useState('');
         const [sendState, setSendState] = useState('');
@@ -1697,6 +1901,9 @@ function stripHintNoise(text) {
             'div',
             { className: 'emx-row' },
             h('span', { className: 'emx-badge emx-badgeError' }, label),
+            record.childId !== undefined && record.childId !== ''
+              ? h('span', { className: 'emx-badge' }, t('item.fromChild', { id: String(record.childId).slice(0, 8) }))
+              : null,
             resolved ? h('span', { className: 'emx-badge emx-badgeResolved' }, t('item.resolved')) : null,
             h(
               'span',
@@ -1816,10 +2023,10 @@ function stripHintNoise(text) {
             : undefined;
 
         const sessionId = given;
-        const { session, records, topSeq, seen, unread, markRead, markReadThrough, hasMore, loadingOlder, loadOlder } =
+        const { session, records, childRecords, topSeq, seen, unread, markRead, markReadThrough, hasMore, loadingOlder, loadOlder } =
           useErrorFeed(ctx, sessionId, { baseline: true });
         const newCount = unread;
-        const grouped = useMemo(() => groupRecords(records), [records]);
+        const grouped = useMemo(() => groupRecords(sortRecords(records.concat(childRecords))), [records, childRecords]);
         const [sourceFilter, setSourceFilter] = useState('all');
         const [unreadOnly, setUnreadOnly] = useState(false);
         // The resolved marks ride the group key, so one click covers every repeat
@@ -2096,8 +2303,8 @@ function stripHintNoise(text) {
                       t,
                       session,
                       sessionId,
-                      isNew: seen !== null && record.seq > seen,
-                      onHandled: markReadThrough,
+                      isNew: !record.fromChild && seen !== null && record.seq > seen,
+                      onHandled: record.fromChild ? undefined : markReadThrough,
                       resolved: resolvedMap[groupKey(record)] !== undefined,
                       onResolve,
                       onUnresolve,
@@ -2186,7 +2393,7 @@ function stripHintNoise(text) {
           const sessionId = typeof props.sessionId === 'string' && props.sessionId !== '' ? props.sessionId : undefined;
           // The row seeds the watermark on first sight too, so only failures that
           // arrive after the user actually saw the session count as unread.
-          const { records, unread } = useErrorFeed(ctx, sessionId, { baseline: true });
+          const { records, unread } = useErrorFeed(ctx, sessionId, { baseline: true, children: false });
           if (unread <= 0 || records.length === 0) return null;
           return h(
             'span',
