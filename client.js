@@ -670,8 +670,12 @@ window.__ModuleLoader__.load({
 
     /* ------------------------------------------------------------- error feed */
 
-    /** Notice timestamps are shared so a re-render cannot rewrite an arrival time. */
-    const noticeTimes = new Map();
+    /**
+     * A runtime notice is one continuing condition, not a new failure on every
+     * render. Its arrival time and its ordering slot are captured once, on first
+     * sight: once a watermark moves past it, it stays past.
+     */
+    const noticeStates = new Map();
 
     /** Resolve the Session object behind an id, or undefined while unretained. */
     function sessionOf(sessions, sessionId) {
@@ -692,13 +696,16 @@ window.__ModuleLoader__.load({
       const notice = isRecord(sessionSnapshot) ? sessionSnapshot.lastAgentError : undefined;
       if (typeof notice === 'string' && notice.trim() !== '') {
         const key = String(notice.trim());
-        // Arrival times live for the page's lifetime; a cap keeps a very long
+        // Both values live for the page's lifetime; a cap keeps a very long
         // session from growing the map without bound.
-        if (!noticeTimes.has(key)) {
-          if (noticeTimes.size >= 100) noticeTimes.delete(noticeTimes.keys().next().value);
-          noticeTimes.set(key, Date.now());
+        if (!noticeStates.has(key)) {
+          if (noticeStates.size >= 100) noticeStates.delete(noticeStates.keys().next().value);
+          let top = 0;
+          for (const record of list) if (Number.isFinite(record.seq) && record.seq > top) top = record.seq;
+          noticeStates.set(key, { at: Date.now(), seq: top + 0.5 });
         }
-        list = mergeRuntimeNotice(list, key, noticeTimes.get(key));
+        const state = noticeStates.get(key);
+        list = mergeRuntimeNotice(list, key, state.at, state.seq);
       }
       return sortRecords(list);
     }
@@ -791,7 +798,10 @@ window.__ModuleLoader__.load({
       const sessionsRef = useRef(sessions);
       sessionsRef.current = sessions;
       // The Session object arrives once the runtime retains its generation.
-      const listSnapshot = useStoreValue(sessions !== undefined ? sessions.list : undefined);
+      const withChildren = options === undefined || options.children !== false;
+      // Only child discovery needs the catalog; a plain unread badge must not
+      // wake on every unrelated session being listed.
+      const listSnapshot = useStoreValue(withChildren && sessions !== undefined ? sessions.list : undefined);
       const session = sessionOf(sessions, sessionId);
       const entriesSnapshot = useStoreValue(session !== undefined ? session.eventSource : undefined);
       const sessionSnapshot = useStoreValue(session !== undefined ? session : undefined);
@@ -816,12 +826,9 @@ window.__ModuleLoader__.load({
         if (baseline && seen === null) writeNumber(seenKey, topSeq);
       }, [baseline, seen, seenKey, topSeq]);
 
-      const unread = seen === null ? (baseline ? 0 : records.length) : records.filter((record) => record.seq > seen).length;
-
       // A child generation's errors never reach the parent's live window. Discover
       // its id from failure notices and from the catalog (workflow children send no
       // notice), then open each child's eventSource once and fold its own failures.
-      const withChildren = options === undefined || options.children !== false;
       const childIds = useMemo(() => {
         if (!withChildren) return [];
         const found = [];
@@ -842,7 +849,14 @@ window.__ModuleLoader__.load({
         return found.slice(0, 25);
       }, [records, listSnapshot, sessionId, withChildren]);
       const childIdsKey = childIds.join(String.fromCharCode(1));
+      // Keyed by child id and re-read whenever the parent learns of a new failure,
+      // so a child that failed again is never frozen at its first read. The effect
+      // depends on the failure count rather than the record array: an ordinary
+      // event must not re-open every child generation.
       const childCache = useRef(new Map());
+      const childFingerprint = useRef('');
+      const recordsRef = useRef(records);
+      recordsRef.current = records;
       const [childRecords, setChildRecords] = useState([]);
 
       useEffect(() => {
@@ -851,38 +865,55 @@ window.__ModuleLoader__.load({
         const run = async () => {
           const current = sessionsRef.current;
           const cache = childCache.current;
-          let missing = false;
           for (const id of ids) {
-            if (!cache.has(id)) { missing = true; break; }
-          }
-          if (missing) {
-            const next = new Map(cache);
-            for (const id of ids) {
-              if (next.has(id)) continue;
-              next.set(id, await readChildRecords(current, id));
-              if (cancelled) return;
-            }
-            childCache.current = next;
+            const entry = cache.get(id);
+            if (entry !== undefined && entry.topSeq === topSeq) continue;
+            const fresh = await readChildRecords(current, id);
+            if (cancelled) return;
+            cache.set(id, { records: fresh, topSeq });
           }
           if (cancelled) return;
           const merged = [];
+          const latest = recordsRef.current;
           for (const id of ids) {
-            const found = childCache.current.get(id);
-            if (!found) continue;
+            const found = cache.get(id);
+            if (found === undefined || !Array.isArray(found.records)) continue;
             let noticeSeq = 0;
-            for (const record of records) {
+            for (const record of latest) {
               if (record.source === 'subagent' && record.child === id && Number.isFinite(record.seq) && record.seq > noticeSeq) noticeSeq = record.seq;
             }
-            const base = noticeSeq > 0 ? noticeSeq : topSeq;
-            for (let i = 0; i < found.length; i += 1) {
-              merged.push(Object.assign({}, found[i], { orderSeq: base - 0.01 - i * 0.0001 }));
+            const base = Math.max(noticeSeq, topSeq, 1);
+            for (let i = 0; i < found.records.length; i += 1) {
+              merged.push(Object.assign({}, found.records[i], { orderSeq: base - 0.01 - i * 0.0001 }));
             }
           }
+          const fingerprint = merged
+            .map((record) => String(record.childId) + ':' + String(record.seq) + ':' + String(record.orderSeq))
+            .join('|');
+          if (fingerprint === childFingerprint.current) return;
+          childFingerprint.current = fingerprint;
           setChildRecords(merged);
         };
         void run();
         return () => { cancelled = true; };
-      }, [childIdsKey, records, topSeq]);
+      }, [childIdsKey, topSeq, records.length]);
+
+      // A child generation's own failures only count when no parent notice already
+      // reports that child: counting both would show one failure twice.
+      const unread = useMemo(() => {
+        const noticeChildren = new Set();
+        for (const record of records) {
+          if (record.source === 'subagent' && typeof record.child === 'string' && record.child !== '') noticeChildren.add(record.child);
+        }
+        const fresh = (seq) => (Number.isFinite(seq) ? (seen === null ? false : seq > seen) : false);
+        let count = 0;
+        for (const record of records) if (fresh(record.seq)) count += 1;
+        for (const record of childRecords) {
+          if (noticeChildren.has(record.childId)) continue;
+          if (fresh(typeof record.orderSeq === 'number' ? record.orderSeq : record.seq)) count += 1;
+        }
+        return count;
+      }, [records, childRecords, seen, baseline]);
 
       // Reading one failure is not reading the newer ones, so the watermark only
       // moves up to that record.
@@ -893,7 +924,13 @@ window.__ModuleLoader__.load({
         },
         [seen, seenKey],
       );
-      const markRead = useCallback(() => markReadThrough(topSeq), [markReadThrough, topSeq]);
+      const markRead = useCallback(() => {
+        let through = topSeq;
+        for (const record of childRecords) {
+          if (typeof record.orderSeq === 'number' && record.orderSeq > through) through = record.orderSeq;
+        }
+        markReadThrough(through);
+      }, [markReadThrough, topSeq, childRecords]);
 
       // Older pages are not in the live window: one Turn-aligned page per request.
       const loadOlder = useCallback(() => {
@@ -917,6 +954,80 @@ window.__ModuleLoader__.load({
         hasMore: isRecord(entriesSnapshot) ? entriesSnapshot.hasMore === true : false,
         loadingOlder: isRecord(sessionSnapshot) ? sessionSnapshot.loadingOlder === true : false,
       };
+    }
+
+    /* ------------------------------------------------------- sidebar badge */
+
+    /** Folded per snapshot object: the badge re-renders far more often than events arrive. */
+    const BADGE_SCAN = new WeakMap();
+
+    /**
+     * The failure signatures only. This is the fold without messages, raw payloads
+     * or cause attribution, because the sidebar needs a count and nothing else.
+     */
+    function badgeScan(snapshot) {
+      if (!isRecord(snapshot)) return { seqs: [], texts: [] };
+      const cached = BADGE_SCAN.get(snapshot);
+      if (cached !== undefined) return cached;
+      const entries = Array.isArray(snapshot.entries) ? snapshot.entries : [];
+      const seqs = [];
+      const texts = [];
+      for (const entry of entries) {
+        const event = durableEvent(entry);
+        if (event === undefined) continue;
+        const failure = failureSignature(event);
+        if (failure === undefined) continue;
+        seqs.push(failure.seq);
+        texts.push(failure.text);
+      }
+      const result = { seqs, texts };
+      BADGE_SCAN.set(snapshot, result);
+      return result;
+    }
+
+    /**
+     * The sidebar's unread count for one Session. It keeps the runtime notice and
+     * the first-sight seed of useErrorFeed, but never builds a card.
+     */
+    function useRowUnread(ctx, sessionId) {
+      const sessions = safeService(ctx, 'sessions');
+      const session = sessionOf(sessions, sessionId);
+      const entriesSnapshot = useStoreValue(session !== undefined ? session.eventSource : undefined);
+      const sessionSnapshot = useStoreValue(session !== undefined ? session : undefined);
+      const seen = useSeenValue(SEEN_PREFIX + String(sessionId));
+      const scan = useMemo(() => badgeScan(entriesSnapshot), [entriesSnapshot]);
+      let parentTop = 0;
+      for (const seq of scan.seqs) if (seq > parentTop) parentTop = seq;
+      const notice =
+        isRecord(sessionSnapshot) && typeof sessionSnapshot.lastAgentError === 'string'
+          ? sessionSnapshot.lastAgentError.trim()
+          : '';
+      let noticeSeq = 0;
+      if (notice !== '') {
+        const known = scan.texts.some((text) => text !== '' && (text.indexOf(notice) !== -1 || notice.indexOf(text) !== -1));
+        if (!known) {
+          let state = noticeStates.get(notice);
+          if (state === undefined) {
+            if (noticeStates.size >= 100) noticeStates.delete(noticeStates.keys().next().value);
+            state = { at: Date.now(), seq: parentTop + 0.5 };
+            noticeStates.set(notice, state);
+          }
+          noticeSeq = state.seq;
+        }
+      }
+      const topSeq = Math.max(parentTop, noticeSeq);
+
+      // The same seed as the panel: installing the plugin must not light up every
+      // failure a session ever recorded.
+      useEffect(() => {
+        if (seen === null) writeNumber(SEEN_PREFIX + String(sessionId), topSeq);
+      }, [seen, sessionId, topSeq]);
+
+      if (seen === null) return 0;
+      let count = 0;
+      for (const seq of scan.seqs) if (seq > seen) count += 1;
+      if (noticeSeq > seen) count += 1;
+      return count;
     }
 
     /* ------------------------------------------------------------------ fold */
@@ -1334,6 +1445,48 @@ function stripHintNoise(text) {
     }
 
     /**
+     * The one place that decides whether a durable event is a failure, and what
+     * its smallest signature is. The fold and the sidebar badge both read it, so
+     * a new failure type can never light one without the other.
+     */
+    function failureSignature(event) {
+      if (!isRecord(event)) return undefined;
+      const data = isRecord(event.data) ? event.data : {};
+      const seq = Number(event.seq);
+      if (!Number.isFinite(seq)) return undefined;
+      if (event.type === 'turn/end') {
+        if (!isRecord(data.reason) || data.reason.kind !== 'error') return undefined;
+        return { seq, source: 'turn', text: messageOf(data.reason.error) };
+      }
+      if (event.type === 'tool/result') {
+        if (!isRecord(data.error)) return undefined;
+        const explicit = typeof data.error.reason === 'string' && data.error.reason !== '' ? data.error.reason : '';
+        // dsh-ops cordis mode reroutes built-in tools (e.g. read -> ops_inspect_local_file);
+        // that is a routing notice, not a real failure, so keep it out of the monitor.
+        if (
+          /\bMODE_REPLACEMENT\b/.test(explicit) ||
+          /cordis mode replaced the official tool/i.test(explicit !== '' ? explicit : resultText(data))
+        ) {
+          return undefined;
+        }
+        return { seq, source: 'tool', text: explicit !== '' ? explicit : resultText(data) };
+      }
+      if (event.type === 'user/message') {
+        const notice = subagentNotice(data);
+        if (notice === null) return undefined;
+        return { seq, source: 'subagent', text: notice.text, notice };
+      }
+      if (event.type === 'command/done' && data.kind === 'error') {
+        return {
+          seq,
+          source: 'command',
+          text: typeof data.text === 'string' && data.text !== '' ? data.text : messageOf(data),
+        };
+      }
+      return undefined;
+    }
+
+    /**
      * Every failure this session recorded, read from its durable events:
      * a `turn/end` whose reason kind is `error` is a failed model call, a
      * `tool/result` carrying `error` is a failed tool, and a `command/done`
@@ -1385,9 +1538,8 @@ function stripHintNoise(text) {
         }
 
         if (event.type === 'turn/end') {
-          const reason = data.reason;
-          if (!isRecord(reason) || reason.kind !== 'error') continue;
-          const raw = reason.error;
+          if (failureSignature(event) === undefined) continue;
+          const raw = data.reason.error;
           const record = {
             id: 'turn:' + String(event.seq),
             seq,
@@ -1402,14 +1554,16 @@ function stripHintNoise(text) {
             detail: turnDetail(raw),
             raw: truncate(safeJson(raw), 8000),
           };
+          record.cause = causeKeyOf(record);
           record.message = describeError(record);
           records.push(record);
           continue;
         }
 
         if (event.type === 'tool/result') {
+          const failure = failureSignature(event);
+          if (failure === undefined) continue;
           const error = data.error;
-          if (!isRecord(error)) continue;
           const message = isRecord(data.message) ? data.message : undefined;
           const source = isRecord(message) && isRecord(message.source) ? message.source : undefined;
           const callId =
@@ -1423,19 +1577,10 @@ function stripHintNoise(text) {
           const call = callId !== null ? calls.get(callId) : undefined;
           const tool = call !== undefined ? call.name : null;
           const path = call !== undefined ? call.path : null;
-          const explicit = typeof error.reason === 'string' && error.reason !== '' ? error.reason : '';
-          // dsh-ops cordis mode reroutes built-in tools (e.g. read -> ops_inspect_local_file);
-          // that is a routing notice, not a real failure, so keep it out of the monitor.
-          if (
-            /\bMODE_REPLACEMENT\b/.test(explicit) ||
-            /cordis mode replaced the official tool/i.test(explicit !== '' ? explicit : resultText(data))
-          ) {
-            continue;
-          }
           // The runtime reports a tool failure as a bare {name, code}; the human
           // sentence lives in the result message, so it has to travel with the
           // raw payload or "send the full raw" would hand over an empty error.
-          const detailText = stripToolHints(explicit !== '' ? explicit : resultText(data));
+          const detailText = stripToolHints(failure.text);
           const record = {
             id: 'tool:' + String(event.seq),
             seq,
@@ -1460,13 +1605,15 @@ function stripHintNoise(text) {
               8000,
             ),
           };
+          record.cause = causeKeyOf(record);
           record.message = describeError(record);
           records.push(record);
           continue;
         }
 
         if (event.type === 'user/message') {
-          const notice = subagentNotice(data);
+          const failure = failureSignature(event);
+          const notice = failure === undefined ? null : failure.notice;
           if (notice !== null) {
             const record = {
               id: 'subagent:' + String(event.seq),
@@ -1482,13 +1629,16 @@ function stripHintNoise(text) {
               detail: notice.text,
               raw: truncate(safeJson({ source: data.source, content: data.content }), 8000),
             };
+            record.cause = causeKeyOf(record);
             record.message = describeError(record);
             records.push(record);
           }
           continue;
         }
 
-        if (event.type === 'command/done' && data.kind === 'error') {
+        if (event.type === 'command/done') {
+          const failure = failureSignature(event);
+          if (failure === undefined) continue;
           const record = {
             id: 'command:' + String(event.seq),
             seq,
@@ -1499,9 +1649,10 @@ function stripHintNoise(text) {
             path: null,
             step: null,
             code: null,
-            detail: typeof data.text === 'string' && data.text !== '' ? data.text : messageOf(data),
+            detail: failure.text,
             raw: truncate(safeJson(data), 8000),
           };
+          record.cause = causeKeyOf(record);
           record.message = describeError(record);
           records.push(record);
         }
@@ -1509,17 +1660,15 @@ function stripHintNoise(text) {
       return records;
     }
 
-    function mergeRuntimeNotice(records, notice, observedAt) {
+    function mergeRuntimeNotice(records, notice, observedAt, stableSeq) {
       if (typeof notice !== 'string' || notice.trim() === '') return records;
       const text = notice.trim();
       for (const record of records) {
         if (record.message.indexOf(text) !== -1 || text.indexOf(record.message) !== -1) return records;
       }
-      let top = 0;
-      for (const record of records) if (Number.isFinite(record.seq) && record.seq > top) top = record.seq;
       const runtimeRecord = {
         id: 'runtime:' + text,
-        seq: top + 0.5,
+        seq: stableSeq,
         source: 'runtime',
         turn: null,
         at: observedAt,
@@ -1531,8 +1680,18 @@ function stripHintNoise(text) {
         raw: text,
         message: '',
       };
+      runtimeRecord.cause = causeKeyOf(runtimeRecord);
       runtimeRecord.message = describeError(runtimeRecord);
       return records.concat([runtimeRecord]);
+    }
+
+    /**
+     * A failure's position in the parent's ordering. A child generation keeps its
+     * own seq space, so its slot in this session is the orderSeq the merge gave it;
+     * reading the raw seq would compare two different clocks.
+     */
+    function watermarkOf(record) {
+      return typeof record.orderSeq === 'number' ? record.orderSeq : record.seq;
     }
 
     function sortRecords(records) {
@@ -1548,12 +1707,23 @@ function stripHintNoise(text) {
      * every step would otherwise bury everything else, so the card keeps the
      * newest copy and counts the rest.
      */
+    /**
+     * A cause already attributed during the fold is reused instead of re-running
+     * the whole signature table on every render, filter and export.
+     */
+    function ownedCause(record) {
+      if (record !== null && typeof record === 'object' && Object.prototype.hasOwnProperty.call(record, 'cause')) {
+        return record.cause;
+      }
+      return causeKeyOf(record);
+    }
+
     function groupKey(record) {
       // Child records carry their own sequence space; prefixing the key keeps two
       // children with the same failure from collapsing into one group. Parent keys
       // stay byte-for-byte identical so saved resolved marks keep working.
       const child = record.childId === undefined || record.childId === '' ? '' : String(record.childId) + String.fromCharCode(1);
-      const cause = causeKeyOf(record);
+      const cause = ownedCause(record);
       if (cause !== null) {
         return child + [
           record.source,
@@ -1583,6 +1753,8 @@ function stripHintNoise(text) {
           grouped.push(copy);
           continue;
         }
+        // The input is newest first, so the first copy already holds the newest
+        // slot (a parent's seq, a child's orderSeq). A merge must never move it.
         existing.count += 1;
         existing.seqs.push(record.seq);
         // Records arrive newest first, so the last merge carries the oldest time.
@@ -1771,7 +1943,7 @@ function stripHintNoise(text) {
         }, [record.usage, t]);
 
         // Attribution reads the whole raw payload, not just the visible summary.
-        const causeKey = useMemo(() => causeKeyOf(record), [record]);
+        const causeKey = useMemo(() => ownedCause(record), [record]);
         const causeText = causeKey === null ? '' : t(causeKey);
 
         // A turn error kills the turn; everything else leaves the session usable.
@@ -1851,7 +2023,7 @@ function stripHintNoise(text) {
               const failed = result !== undefined && result.ok === false;
               setSendState(failed ? 'failed' : 'sent');
               // Handing the failure to the agent is the strongest sign it was read.
-              if (!failed && typeof onHandled === 'function') onHandled(record.seq);
+              if (!failed && typeof onHandled === 'function') onHandled(watermarkOf(record));
             } catch {
               setSendState('failed');
             }
@@ -1881,7 +2053,7 @@ function stripHintNoise(text) {
           if (resolved) {
             if (typeof onUnresolve === 'function') onUnresolve(key);
           } else {
-            if (typeof onResolve === 'function') onResolve(key, record.seq);
+            if (typeof onResolve === 'function') onResolve(key, watermarkOf(record));
           }
         }, [resolved, onResolve, onUnresolve, record]);
 
@@ -2027,6 +2199,7 @@ function stripHintNoise(text) {
           useErrorFeed(ctx, sessionId, { baseline: true });
         const newCount = unread;
         const grouped = useMemo(() => groupRecords(sortRecords(records.concat(childRecords))), [records, childRecords]);
+        const totalCount = records.length + childRecords.length;
         const [sourceFilter, setSourceFilter] = useState('all');
         const [unreadOnly, setUnreadOnly] = useState(false);
         // The resolved marks ride the group key, so one click covers every repeat
@@ -2068,7 +2241,7 @@ function stripHintNoise(text) {
           () =>
             grouped.filter((group) => {
               if (sourceFilter !== 'all' && group.source !== sourceFilter) return false;
-              if (unreadOnly && !(seen !== null && group.seq > seen)) return false;
+              if (unreadOnly && !(seen !== null && watermarkOf(group) > seen)) return false;
               if (hideResolved && resolvedMap[groupKey(group)] !== undefined) return false;
               if (needles.length > 0) {
                 // The keywords match any of: human-readable message, complete raw
@@ -2110,7 +2283,7 @@ function stripHintNoise(text) {
               (repeats ? ' ×' + String(group.count) : '');
             parts.push('', '## ' + heading);
             if (group.message !== '') parts.push(group.message);
-            const groupCause = causeKeyOf(group);
+            const groupCause = ownedCause(group);
             if (groupCause !== null) parts.push('- ' + t('item.cause', { cause: t(groupCause) }));
             // The report is handed to a fresh session, so a mark the user already
             // made must travel with it — otherwise the agent re-diagnoses a fix.
@@ -2173,7 +2346,7 @@ function stripHintNoise(text) {
             h('span', { className: 'emx-headTitle' }, t('tab.title')),
             h('span', { className: 'emx-headMeta' }, t('panel.subtitle')),
             h('span', { className: 'emx-metaSpacer' }),
-            h('span', { className: 'emx-headMeta' }, t('panel.total', { n: String(records.length) })),
+            h('span', { className: 'emx-headMeta' }, t('panel.total', { n: String(totalCount) })),
             h(
               'button',
               {
@@ -2284,7 +2457,7 @@ function stripHintNoise(text) {
                 ),
               )
             : null,
-          records.length === 0
+          grouped.length === 0
             ? h(
                 'div',
                 { className: 'emx-empty' },
@@ -2303,7 +2476,7 @@ function stripHintNoise(text) {
                       t,
                       session,
                       sessionId,
-                      isNew: !record.fromChild && seen !== null && record.seq > seen,
+                      isNew: seen !== null && watermarkOf(record) > seen,
                       onHandled: record.fromChild ? undefined : markReadThrough,
                       resolved: resolvedMap[groupKey(record)] !== undefined,
                       onResolve,
@@ -2393,8 +2566,8 @@ function stripHintNoise(text) {
           const sessionId = typeof props.sessionId === 'string' && props.sessionId !== '' ? props.sessionId : undefined;
           // The row seeds the watermark on first sight too, so only failures that
           // arrive after the user actually saw the session count as unread.
-          const { records, unread } = useErrorFeed(ctx, sessionId, { baseline: true, children: false });
-          if (unread <= 0 || records.length === 0) return null;
+          const unread = useRowUnread(ctx, sessionId);
+          if (unread <= 0) return null;
           return h(
             'span',
             {
