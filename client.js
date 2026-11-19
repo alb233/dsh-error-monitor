@@ -133,6 +133,18 @@ window.__ModuleLoader__.load({
         'next.traceback': 'Read the last line of the traceback — the exception type and message there are the root cause',
         'next.abort': 'Find what cancelled the request, then start it again',
         'next.default': 'Send this back to the conversation so the model reads the original event, instead of guessing at the arguments',
+        'next.loop': 'Stop resending this call — {next}',
+        'next.toolname':
+          'Do not send it again: this provider cannot produce a usable tool call here — switch model or route for this session',
+        'next.safetynet': 'Read the rule it names: rename or move the path out of sensitive scope, or make the call carry a real tool name — an identical retry changes nothing',
+        'next.notread': 'Read the file first, then edit from what you just read',
+        'next.invalidargs': 'Open the tool schema and fill the argument it names — the model is fine, the call is not',
+        'next.compress': 'Call acp_status for live refs, then compress a range that still exists',
+        'next.vision': 'Switch to a model that sees images, or ask the user to paste the text instead of the picture',
+        'next.asarpath': 'Search the unpacked tree or a single file instead — app.asar is an archive, not a directory',
+        'next.state': 'List the legal states and move through them — there is no direct jump to that target',
+        'next.webnet': 'Try a single URL on its own first; if that also fails it is the network or proxy, not the page — resending the same batch fails the same way',
+        'next.redirect': 'Request the URL it points at, not the redirector',
         'item.args': 'Call arguments: {args}',
         'item.resolved': 'Resolved',
         'item.resolve': 'Mark resolved',
@@ -182,6 +194,19 @@ window.__ModuleLoader__.load({
         'cause.coderun': 'Code execution failed — the exception line right after it names the real cause',
         'cause.review': 'Tool auto-review failed — the review step itself broke; the reason quoted after it is the real one',
         'cause.unknown': 'No known signature — the raw error has to be read',
+        'cause.toolname':
+          'The tool call arrived without a usable name (or with its arguments glued onto the name) — this provider is not speaking the tool-call format the runtime expects, so every call in the session fails the same way',
+        'cause.safetynet': 'The host blocked the call before it ran — an unusable tool name, or a path it treats as sensitive',
+        'cause.notread': 'The file was never read in this session, so the edit was refused before its content could be checked',
+        'cause.invalidargs': 'The call was rejected before it ran — a required argument is missing or malformed',
+        'cause.compress': 'The compression anchors no longer exist — those refs have aged out of the context window',
+        'cause.vision': 'The image was refused — this model, or this machine, has no vision capability',
+        'cause.asarpath': 'The path runs into an app.asar archive, which the search tool cannot read as a directory — nothing was actually searched',
+        'cause.state': 'The state machine refused the move — the target state is not reachable from the current one',
+        'cause.webnet': 'The fetch never produced a response — it failed before any HTTP status existed (DNS, proxy, TLS or an unreachable host)',
+        'cause.redirect': 'The request was redirected to another origin, which is not followed automatically',
+        'item.loop': 'Retry loop: this same call has already failed {n} times — the next identical attempt will fail too',
+        'item.loopBadge': 'retry loop ×{n}',
         'item.scale': 'Last request ≈ {tokens} tokens ({input} in · {cache} cached)',
         'item.scaleNoCache': 'Last request ≈ {tokens} tokens ({input} in)',
         'item.since': 'first {time}',
@@ -326,6 +351,17 @@ window.__ModuleLoader__.load({
         'next.traceback': '读 traceback 最后一行，那里的异常类型和消息通常就是根因',
         'next.abort': '查清是谁取消了请求，再重新发起',
         'next.default': '点「发回对话」，让模型读原始事件后给定位；别在参数上瞎试',
+        'next.loop': '先别重发这次调用——{next}',
+        'next.toolname': '别重发：是这个 provider 生不出可用的工具调用，本会话换模型或换路由',
+        'next.safetynet': '看它点名的规则：把路径改名或挪出敏感范围，或让调用带上真实的工具名——原样重试不会有变化',
+        'next.notread': '先 read 这个文件，再按刚读到的内容改',
+        'next.invalidargs': '打开工具 schema 补上它点名的那一项：模型没问题，是这次调用缺东西',
+        'next.compress': '先 acp_status 拿最新 refs，再压缩还存在的范围',
+        'next.vision': '换有视觉能力的模型，或让用户把图里的文字贴出来',
+        'next.asarpath': '改在解包后的目录或单个文件里搜——app.asar 是归档，不是目录',
+        'next.state': '先看合法状态列表再一步步推进——没有直达那个目标状态的路',
+        'next.webnet': '先单独试一条 URL；如果也失败，那是网络或代理的问题、不是页面的问题——重发同一批会一样失败',
+        'next.redirect': '直接请求它指向的 URL，不要请求跳转入口',
         'item.args': '调用参数：{args}',
         'item.resolved': '已解决',
         'item.resolve': '标记已解决',
@@ -375,6 +411,19 @@ window.__ModuleLoader__.load({
         'cause.coderun': '代码执行失败：紧跟其后的异常行才是真正原因',
         'cause.review': '工具自动审查失败：是审查步骤本身出错，其后引用的原因才是真因',
         'cause.unknown': '未匹配到已知特征：需要读原始错误',
+        'cause.toolname':
+          '工具调用没有可用的名字（或把参数粘在了名字里）——这个 provider 的工具调用格式和运行时对不上，本会话每次调用都会这样失败',
+        'cause.safetynet': '宿主在调用执行前就拦下了——工具名不可用，或路径被判定为敏感',
+        'cause.notread': '这个文件本次会话还没读过，改动在校验内容之前就被拒了',
+        'cause.invalidargs': '调用在执行前被拒：缺少必填参数，或参数形状不对',
+        'cause.compress': '压缩锚点已失效——那些 ref 已经被挤出上下文窗口',
+        'cause.vision': '图片被拒：当前模型或本机没有视觉能力',
+        'cause.asarpath': '路径落在 app.asar 归档里，搜索工具没法当目录读——这次其实什么都没搜到',
+        'cause.state': '状态机拒绝了这次流转：从当前状态到不了目标状态',
+        'cause.webnet': '抓取没拿到任何响应：在 HTTP 状态出现之前就失败了（DNS、代理、TLS 或主机不可达）',
+        'cause.redirect': '请求被跳到另一个域名，跨域跳转不会自动跟随',
+        'item.loop': '重试循环：同一次调用已经失败 {n} 次，再原样试还会失败',
+        'item.loopBadge': '重试循环 ×{n}',
         'item.scale': '最近一次请求 ≈ {tokens} tokens（输入 {input} · 缓存 {cache}）',
         'item.scaleNoCache': '最近一次请求 ≈ {tokens} tokens（输入 {input}）',
         'item.since': '最早 {time}',
@@ -1239,9 +1288,27 @@ window.__ModuleLoader__.load({
      * rather than a wrong guess.
      */
     const CAUSES = [
+      // Protocol and guard-rail failures happen before any content is touched, so
+      // they are tested first: a broken tool-call format repeats on every step of
+      // the session and would otherwise be filed as whatever word it happens to
+      // contain. “unknown tool” is the runtime, “CC Safety Net” is the host.
+      // The host block comes first: its own reason text quotes the broken call,
+      // and the block — not the call — is what the reader can act on.
+      { key: 'cause.safetynet', re: /CC Safety Net|BLOCKED by CC Safety Net/i },
+      { key: 'cause.toolname', re: /unknown tool ""|unknown tool "[^"]*[({]/i },
+      { key: 'cause.notread', re: /file has not been read|FS_NOT_OBSERVED|has not been read yet/i },
+      { key: 'cause.invalidargs', re: /invalid arguments|INVALID_ARGS|missing required (property|parameter)/i },
+      { key: 'cause.compress', re: /cannot be anchored|Compression FAILED|COMPRESS_ANCHOR/i },
+      { key: 'cause.vision', re: /does not support image|No vision provider|vision provider is not set/i },
+      { key: 'cause.asarpath', re: /\.asar[\\/]|app\.asar/i },
+      { key: 'cause.state', re: /非法闭环迁移|状态必须|status 必须是|invalid (status )?transition/i },
+      { key: 'cause.redirect', re: /cross-origin redirect|is not followed automatically/i },
+      // A fetch that dies before any status exists is a network fault, not a page
+      // fault — and it repeats on every URL until the proxy is fixed.
+      { key: 'cause.webnet', re: /web fetch failed|TypeError: fetch failed/i },
       { key: 'cause.quota', re: /ACCOUNT_QUOTA|insufficient balance|insufficient_quota|quota exceeded|billing_error|余额不足/i },
       { key: 'cause.rate', re: /(?<![0-9])(429|424)(?![0-9])|Too Many Requests|rate[ _-]?limit|bili_throttle|throttl|限流/i },
-      { key: 'cause.auth', re: /(?<![0-9])401(?![0-9])|Unauthorized|authentication required|invalid api key/i },
+      { key: 'cause.auth', re: /(?<![0-9])401(?![0-9])|Unauthorized|authentication required|invalid api key|api key [^.\n]*is invalid|incorrect api key/i },
       { key: 'cause.forbidden', re: /(?<![0-9])403(?![0-9])|Forbidden|OWNER_REQUIRED|权限被拒/i },
       { key: 'cause.payload', re: /(?<![0-9])413(?![0-9])|Payload Too Large|request entity too large/i },
       { key: 'cause.gateway', re: /(?<![0-9])50[234](?![0-9])|Bad Gateway|Service Unavailable|Gateway Timeout/i },
@@ -1303,6 +1370,16 @@ window.__ModuleLoader__.load({
      * failure, so they must not decide what the failure is called.
      */
     const NEXT_ACTIONS = {
+  'cause.toolname': 'next.toolname',
+  'cause.safetynet': 'next.safetynet',
+  'cause.notread': 'next.notread',
+  'cause.invalidargs': 'next.invalidargs',
+  'cause.compress': 'next.compress',
+  'cause.vision': 'next.vision',
+  'cause.asarpath': 'next.asarpath',
+  'cause.state': 'next.state',
+  'cause.webnet': 'next.webnet',
+  'cause.redirect': 'next.redirect',
   'cause.quota': 'next.quota',
   'cause.rate': 'next.rate',
   'cause.auth': 'next.auth',
@@ -1763,6 +1840,13 @@ function stripHintNoise(text) {
       return grouped;
     }
 
+    /**
+     * How many identical failures turn an incident into a loop. Three is the
+     * point where “just try again” has already been disproved twice, so the card
+     * stops offering the same call and says what to change instead.
+     */
+    const LOOP_MIN_COUNT = 3;
+
     function pad(value) {
       return String(value).padStart(2, '0');
     }
@@ -1844,6 +1928,7 @@ function stripHintNoise(text) {
 .emx-chip:hover { border-color: var(--dsw-alias-border-l3); color: var(--dsw-alias-label-primary); }
 .emx-chipActive { border-color: var(--dsw-alias-state-error-primary); color: var(--dsw-alias-state-error-primary); }
 .emx-badgeCount { border-color: var(--dsw-alias-state-error-primary); color: var(--dsw-alias-state-error-primary); }
+.emx-badgeLoop { border-color: var(--dsw-alias-state-error-primary); color: var(--dsw-alias-state-error-primary); font-weight: 600; }
 .emx-badgeResolved { border-color: var(--dsw-alias-state-success-primary); color: var(--dsw-alias-state-success-primary); }
 .emx-metaSpacer { flex: 1; }
 .emx-message { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 12px; line-height: 18px; color: var(--dsw-alias-label-primary); white-space: pre-wrap; word-break: break-word; background: var(--dsw-alias-bg-base); border: 1px solid var(--dsw-alias-border-l1); border-radius: var(--dsw-radius-sm); padding: 6px 8px; max-height: 132px; overflow: auto; }
@@ -1929,6 +2014,10 @@ function stripHintNoise(text) {
         const timeText = formatTime(record.at);
         const repeats = typeof record.count === 'number' && record.count > 1;
         const firstText = repeats ? formatTime(record.firstAt) : '';
+        // A count on its own reads as “busy”; the point of it is that the method
+        // is already proven wrong. From the third identical failure the card says
+        // so, and the advice stops offering the same call again.
+        const loop = repeats && record.count >= LOOP_MIN_COUNT;
 
         // A provider can reject a request before emitting anything, so no usage is
         // recorded for it; the previous completed request's size is the closest clue.
@@ -1948,7 +2037,8 @@ function stripHintNoise(text) {
 
         // A turn error kills the turn; everything else leaves the session usable.
         const isFatal = record.source === 'turn';
-        const nextText = t((causeKey !== null && NEXT_ACTIONS[causeKey]) || 'next.default');
+        const plainNext = t((causeKey !== null && NEXT_ACTIONS[causeKey]) || 'next.default');
+        const nextText = loop ? t('next.loop', { next: plainNext }) : plainNext;
 
         // The arguments the call was made with are the scene of the failure.
         const argsText =
@@ -1962,6 +2052,7 @@ function stripHintNoise(text) {
           if (timeText !== '') lines.push(timeText);
           if (record.code !== null) lines.push(t('item.code', { code: record.code }));
           if (causeText !== '') lines.push(t('item.cause', { cause: causeText }));
+          if (loop) lines.push(t('item.loop', { n: String(record.count) }));
           if (argsText !== '') lines.push(argsText);
           if (scaleText !== '') lines.push(scaleText);
           if (repeats) {
@@ -1978,7 +2069,7 @@ function stripHintNoise(text) {
           // Copying is free, so the clipboard always carries the complete raw error.
           lines.push(record.raw);
           return lines.join('\n');
-        }, [label, turnText, timeText, record.code, causeText, argsText, scaleText, record.raw, record.seq, repeats, record.seqs, t]);
+        }, [label, turnText, timeText, record.code, causeText, argsText, scaleText, record.raw, record.seq, repeats, record.seqs, loop, record.count, t]);
 
         const onCopy = useCallback(async () => {
           try {
@@ -2000,7 +2091,8 @@ function stripHintNoise(text) {
         // The card and the prompt read the same text; no second formatting pass.
         const summary =
           (record.message === '' ? truncate(stripMarkup(record.raw), 300) : record.message) +
-          (repeats ? ' (×' + record.count + ')' : '');
+          (repeats ? ' (×' + record.count + ')' : '') +
+          (loop ? ' — ' + t('item.loopBadge', { n: String(record.count) }) : '');
         const sendPrompt = useCallback(
           async (templateKey, extra) => {
             if (session === undefined) return;
@@ -2083,6 +2175,7 @@ function stripHintNoise(text) {
               isFatal ? t('item.fatal') : t('item.recover'),
             ),
             repeats ? h('span', { className: 'emx-badge emx-badgeCount' }, '×' + String(record.count)) : null,
+            loop ? h('span', { className: 'emx-badge emx-badgeLoop' }, t('item.loopBadge', { n: String(record.count) })) : null,
             record.tool === null ? null : h('span', { className: 'emx-badge' }, record.tool),
             h('span', { className: 'emx-badge' }, turnText),
             isNew ? h('span', { className: 'emx-newTag' }, t('new.tag')) : null,

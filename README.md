@@ -1,31 +1,243 @@
-# 会话报错监控
+# 会话报错监控 / Session error monitor
 
-一个 DSH Web 插件：把本会话的每一次失败（回合错误、工具失败、命令失败、子智能体异常、运行时通知）作为可复制、可发回对话的卡片，列在「对话 / 上下文 / 编队 / 统计」旁边的 Conversation View 里，让报错在对话现场被读到；同时在侧栏会话行上显示未读告警。
+A DSH Web plugin that lists this session's failures as a Conversation View beside
+对话 / 上下文 / 编队 / 统计, so a failure is read where the conversation is.
 
-## 演示
+## Install
 
-![会话报错监控插件演示：一条 429 限流报错从「原因：」到「处理建议：」再到「发回对话」](docs/error-monitor-demo.gif)
-
-10 秒，一条主流程：**报错上屏 → 看懂原因 → 照着处理建议往下走 → 一键发回对话**。画面逐帧复刻当前 UI（中文文案取自 `client.js` 的 `MESSAGES.zh`、配色取自 DSH 深色主题），首帧就是完整卡片，聚焦框按「原始错误 → 原因 → 处理建议：」依次点亮，结尾高亮「发回对话」。
-
-| 文件 | 用途 |
-|---|---|
-| [docs/error-monitor-demo.gif](docs/error-monitor-demo.gif) | 上面的循环动图，720×405，约 2.9 MB |
-| [docs/error-monitor-demo.mp4](docs/error-monitor-demo.mp4) | 高清视频，1280×720，H.264，约 1.9 MB，GitHub 可直接贴 |
-| [docs/error-monitor-demo-poster.png](docs/error-monitor-demo-poster.png) | 首帧静态图，动图加载不出来时的兜底 |
-
-动图演示的是 429 限流这一条归因链路；卡片里的原始错误是拟真的 `429` 信封，其余可见文案均为界面真实字符串。UI 改动后请同步重新生成，别让动图和插件长得不一样。
-
-## 安装
-
-需要带 Web 客户端的 DSH 版本。可以从插件市场安装，或指向 npm 包、本仓库：
+Requires a DSH build that ships the Web client. Install from the plugin market, or
+point at this repository:
 
 ```sh
-dsh plugin add @alb233/dsh-error-monitor
 dsh plugin add github:alb233/dsh-error-monitor
 ```
 
-仓库声明了 `dsh.bundle` 并附带 `cordis.patch.yml`，因此 CLI 可以从源码或 npm 包安装。
+The repo declares `dsh.bundle` and ships `cordis.patch.yml`, so the CLI can install
+from source. Pure ES modules, no build step, and no runtime dependency beyond the
+host packages listed in `dsh.client.inject`.
+
+## Requirements
+
+DSH `>=0.2.2-rc.1 <0.3.0-0`, as declared in `engines.dsh`. The Web client and its
+`conversation.view` / `sidebar.session.row.leading` slots must be present — they ship
+with `@deepseek-ai/dsh-client-ui-conversation` and
+`@deepseek-ai/dsh-client-ui-sidebar-right`. The plugin runs inside the Host, so it
+needs no separate Node runtime and no network access.
+
+## What it shows
+
+One card per distinct failure the session recorded, newest first. Repeats of the
+same failure collapse into one card with `×N`. Five sources feed the same list:
+
+| Source | Event | Fields the card carries |
+|---|---|---|
+| `回合错误` / Turn error | durable `turn/end` whose `reason.kind` is `error` (an LLM/provider failure) | error code, turn, time, the provider's message (parsed out of a `400: {...}` envelope when there is one) |
+| `工具失败` / Tool failure | durable `tool/result` carrying an `error` | tool name and target path (from the matching `tool/call`), step, error code, the tool's own sentence with model-facing hints trimmed |
+| `命令失败` / Command failure | durable `command/done` whose `kind` is `error` | command name, output text |
+| `子智能体异常` / Subagent failure | durable `user/message` whose `source.kind` is `subagent-settled` and whose wording is not a clean finish | the child session id, the Host's settlement text |
+| `运行时通知` / Runtime notice | the session-level `lastAgentError` when it is not already covered | the notice text and when it was first observed |
+
+`describeError()` in `client.js` is the single place that turns a record into the
+one-line description. The card and the outgoing prompt read that same string, so
+the two can never drift apart. Its order is: tool name, target path, subagent id,
+then the most human detail available, falling back to the bare code so an unknown
+failure stays identifiable. Markup is stripped first — an HTML error page ("504 …
+网站请求超时") loses its conditional comments and inline CSS while keeping the
+sentence that matters.
+
+The provider envelope is the one place the raw text is ugly:
+`400: {"message":"Invalid request parameter","type":"invalid_request_error","param":"","code":null}`
+is parsed to `Invalid request parameter (400)`, and a `param` is appended when the
+gateway names one. A tool failure ends its sentence where escalation guidance for
+the model begins (`retry this exact operation once with sandbox_permissions…`); the
+full text survives in the raw error. Both rules live in `turnDetail()` and
+`stripToolHints()`.
+
+A subagent notice carries no status field, so its wording is the status: the Host
+writes "finished and will do no further work" for a clean finish (ignored — a
+notice is sent on every settle, success included) and "failed before it finished"
+or similar otherwise (carded as `子智能体异常`). The child's own closing words,
+which follow `Its closing message:`, are kept in the raw error but never used to
+judge the outcome, and never reach the card.
+
+For a `turn/end` error the card also carries the scale of the last completed
+request: the newest `assistant/message` before the failure contributes its
+`inputTokens + cacheReadTokens`, shown as e.g. `最近一次请求 ≈ 180.3K tokens（输入
+177,658 · 缓存 2,688）`. The failing request itself records no usage (its attempt
+ends with all-zero counters), so this is the closest size clue the window holds —
+and it is what tells a provider-side rejection apart from a code failure at a
+glance. The same line is included by 复制详情. A failure with no completed request
+before it shows no scale line.
+
+## Cause and next step
+
+A card that matches a known signature states the cause and one concrete next step
+(`CAUSES` → `NEXT_ACTIONS` → the `cause.*` / `next.*` dictionary entries). The table
+is ordered and the first match wins, so a specific signature is always tested before
+a broad one: `403 insufficient balance` is a billing failure, not a permission one.
+A failure nothing matches gets no cause line rather than a wrong guess.
+
+The entries that earn their place are the ones that repeat. A provider emitting tool
+calls with an empty name — or with its arguments glued onto the name — fails on every
+step of the session, so `unknown tool ""` and its `CC Safety Net` fallout are
+classified before any content signature, and their advice is to switch model or route
+rather than call again. The same holds for the host refusing a call, an edit attempted
+on a file that was never read, a call missing a required argument, a compression anchor
+that has aged out of the window, an image handed to a model without vision, a search
+that walked into `app.asar`, an illegal state-machine transition, a cross-origin
+redirect, and a fetch that never reached the network at all.
+
+From the third identical failure the card stops calling it an incident: it carries a
+`retry loop ×N` chip and its advice opens with "stop resending this call", because the
+same request has already been disproved twice. Below that threshold the count is a
+plain `×N` — repetition alone is still just a busy tool.
+
+## Reading it
+
+- The tab keeps one fixed wording, `会话报错`; only the sidebar row shows unread state.
+- A session row in the left sidebar swaps its state dot for a red warning triangle
+  while that session has unread failures.
+- Inside the view, a red banner sits at the top of the panel (`sticky`), counts
+  what arrived since you last looked, and offers **标记已读**. While unread remains,
+  the header's total is red too.
+- Older failures are not in the live window: **加载更早记录** pulls one Turn-aligned
+  page per click (`session.loadOlder()`), so a long session never loads at once.
+- A failure that repeats verbatim (same source, code, tool, path and text) is one
+  problem: the card shows `×N` and the first occurrence's time, keeps the newest
+  raw error, and 复制详情 lists every `seq`. One noisy tool cannot bury the rest.
+- Chips above the list filter by source; the rightmost chip toggles 只看未读. The
+  banner's count stays the true unread total, and a filter that hides everything
+  says so instead of looking like an empty session.
+- Each card can **复制详情** (clipboard, never truncated, includes `seq=`), **发回对话**
+  (a queued prompt carrying a trimmed summary plus the event `seq`), or
+  **发送完整原文** (the same prompt with the full raw error, right-aligned because it
+  costs far more tokens).
+
+## Auditing what a failure will look like
+
+Summaries can only be judged by reading them, and waiting for the user to hit a new
+kind of failure is not acceptable. This script replays a session log through the
+same folding rules and prints what each card and prompt would say — no tokens, no
+clicks:
+
+```powershell
+# newest session
+node tools/audit-error-summaries.mjs
+
+# every session on this machine
+node tools/audit-error-summaries.mjs --all
+
+# one specific log
+node tools/audit-error-summaries.mjs --file <session.v4.jsonl.zstd>
+
+# failures recorded by this session's subagents
+node tools/audit-error-summaries.mjs --children
+
+# subagents of one specific parent
+node tools/audit-error-summaries.mjs --children --file <parent session.v4.jsonl.zstd>
+
+# replay the built-in fixtures, no session log needed
+node tools/audit-error-summaries.mjs --self-test
+```
+
+`--children` uses the newest session as the parent unless `--file` names one, and
+`--all` is ignored in that mode. A parent that never delegated prints
+`(no subagent session recorded for this session)`.
+
+It reports the count per source and per `source:code`, then the rendered text of
+each record. Records that the panel would collapse are printed as one line with
+`×N` and every `seq`, so the audit shows the same list the reader sees. The script
+mirrors `describeError` / `foldErrors` / `groupRecords`; when the extraction
+changes in `client.js`, update the script in the same change.
+
+`--self-test` replays `tools/audit-error-summaries.fixtures.mjs` through the same
+folding rules and asserts the rendered text, so a rule change shows up as a fixture
+diff instead of silently drifting. The four cases cover the provider-envelope parse,
+its plain-message fallback, the tool-hint trim, and the subagent wording filter
+(including the closing-message exclusion).
+
+### Subagent failures
+
+A subagent runs as **its own Session**, not as part of the parent's event window: its
+log header carries `parentSession`, `origin: 'subagent'` and `delegationDepth`, and the
+Host's session list carries those rows even though the UI hides them. This client-only
+build reads only the session on screen, and a child's own `turn/end` and `tool/result`
+records never enter that window. The `subagent` tool result carries nothing but
+`started subagent <id>`.
+
+What does reach the parent is a settlement notice: a durable `user/message` whose
+`source.kind` is `subagent-settled`, with `form: 'notice'`, a `summary` and
+`senderSessionId` naming the child. Every settle sends one — success included — and the
+wording is the only status it carries, so the panel cards the non-clean ones as
+`子智能体异常` and drops the rest (verified against this session's own log,
+2026-11-05). Limits: no structured code, no child tool errors, and workflow runs send
+no notice at all.
+
+`--children` stays the way to see the full picture: it reads the parent header, scans
+every session log for `origin === 'subagent' && parentSession === <parent id>`, folds
+each child with the same rules, and prints per-child counts plus the rendered text. A
+session that never delegated prints `(no subagent session recorded for this session)`.
+
+What it established on this machine (2026-11-05): subagent failures are recorded
+normally — across 134 subagent sessions, 13 had `turn/end` errors and 18 had tool
+errors (one child carried 20). The settlement notice covers a child that dies mid-run;
+tool errors a child recovers from live only in its own log.
+
+### Not covered online
+
+Two heavier paths remain unimplemented, in cost order:
+
+1. **Retain the child session** — `ctx.sessions.subagentAddress(id)` turns a child id
+   into a `SubagentAddress`, and `retain(target)` opens that generation; its
+   `binding.eventSource` folds exactly like the parent's. This yields the child's real
+   `turn/end` and `tool/result` records, but costs one RPC per child, reads a tail window
+   (≤500 messages), can fail with `subagent/unauthorized`, parent-unavailable, or an
+   archived child, and needs a composite key (`childId:seq`) plus a per-child unread
+   watermark because child sequence numbers restart at 1.
+2. **Aggregate in the Host half** — a Host plugin's `ctx.sessions.list()` returns every
+   live Session with no origin filter, and `session/event` reaches every session
+   including children. Most complete and independent of the loaded window, but exposing
+   that to the panel needs a Remote namespace/route, which is not an ordinary plugin API.
+
+Location: `<workspace>/tools/audit-error-summaries.mjs`.
+
+## Data scope
+
+The panel reads only this session's own event window through the Session log mirror
+the Web client already holds (`session.eventSource`), plus the session-level runtime
+notice. It requests no additional data source, network access, or Host endpoint, and
+it writes nothing back into the session log. The only thing it persists is the local
+read watermark, in `localStorage` under this package's key.
+
+## Where it lives
+
+Registered as `conversation.view`, so it appears in the Conversation's View tab row
+next to 对话 / 上下文 / 编队 / 统计. The unread triangle registers into
+`sidebar.session.row.leading`. Nothing is model-facing: the Host half is an empty
+`apply()` that exists only so the Loader has a row.
+
+The stylesheet is rendered by the view body, so anything drawn outside it (the
+sidebar triangle) carries inline styles instead of a class.
+
+## Uninstall behaviour
+
+Unloading the plugin withdraws the View registration and the row decoration; the
+tab disappears and the sidebar rows return to their own state dot. Nothing else in
+the layout is touched.
+
+---
+
+# 中文版
+
+## 安装
+
+需要带 Web 客户端的 DSH 版本。可以从插件市场安装，或直接指向本仓库：
+
+```sh
+dsh plugin add github:alb233/dsh-error-monitor
+```
+
+仓库声明了 `dsh.bundle` 并附带 `cordis.patch.yml`，因此 CLI 可以直接从源码安装。
 纯 ES module，无构建步骤，除 `dsh.client.inject` 里列出的宿主包之外没有运行时依赖。
 
 ## 环境要求
@@ -68,6 +280,23 @@ finished" 之类（记为「子智能体异常」）。子会话自己的遗言�
 （输入 177,658 · 缓存 2,688）`。失败的那次请求自身不记 usage（attempt 计数器全 0），
 所以这是窗口里最接近的规模线索——它能让人一眼分清"网关拒收请求"和"代码报错"。
 复制详情里也有这一行；失败前没有已完成请求时不显示。
+
+## 原因与下一步
+
+命中了已知特征的卡，会写明原因并给一条能直接执行的处理建议（`CAUSES` → `NEXT_ACTIONS`
+→ 字典里的 `cause.*` / `next.*`）。表是有序的、先命中者胜，所以具体的特征一定排在宽泛的
+前面：`403 insufficient balance` 是余额问题，不是权限问题。完全匹配不上的失败不给原因行，
+也不瞎猜。
+
+真正值得留在表里的是那些会**反复出现**的：某个 provider 吐出的工具调用没有名字（或把参数
+粘在名字上），本会话每一步都会这样失败——所以 `unknown tool ""` 和它连带的 `CC Safety Net`
+排在所有内容类特征之前，建议直接是换模型或换路由，而不是再调一次。同一档的还有：宿主在
+执行前拦下调用、改一个从没读过的文件、调用缺必填参数、压缩锚点已过期、把图喂给没有视觉
+能力的模型、搜索走进 `app.asar`、状态机非法流转、跨域跳转不跟随，以及根本没连上网络的抓取。
+
+同一次失败从第 3 次起，卡片不再把它当偶发：加一个「重试循环 ×N」标记，建议以「先别重发
+这次调用」开头——同一个请求已经被证伪两次了。不到这个次数就只显示 `×N`，重复本身还只是
+工具比较忙。
 
 ## 怎么读
 
@@ -157,40 +386,25 @@ node tools/audit-error-summaries.mjs --self-test
    origin），`session/event` 覆盖包括子会话在内的所有会话。最完整、也不依赖已加载窗口，
    但把它暴露给面板需要 Remote 命名空间/路由，那不是普通插件 API。
 
-位置：本仓库的 `tools/audit-error-summaries.mjs`，npm 包里也带这一份。
+位置：`<workspace>/tools/audit-error-summaries.mjs`。
 
-## 归因、发回与闭环
-
-每条卡片先归因再显示。`client.js` 里的 `CAUSES` 是有序的签名表——计费、限流、鉴权、
-请求体、网关、JS 类型错误、语法、模块解析、代码运行、评审、文件系统、沙箱、编码、
-数据库、网络、资源——第一条命中的签名生效。顺序本身就是设计：`403 insufficient balance`
-必须读成「余额不足」而不是「权限被拒」，所以计费排在鉴权之前，两者又都排在宽泛的网络
-正则之前。匹配读完整原文与工具消息，不只看一行摘要；匹配前先剥掉宿主注入的提权提示，
-免得它伪装成沙箱拒绝。
-
-每张卡片自带下一步：
-
-- **处理建议**：归因下方一行动作提示，照着做就能往下走，不必先把错误翻译成人话。
-- **发回对话**：把摘要、归因、会话 ID 与事件 `seq` 交给对话，并要求先用 `session_event_read`
-  读原始事件再判断。一行摘要装不下栈，模型得回到现场。
-- **重跑此步**：带原工具名与原调用参数重发那一步，并说明按原样跑——改参数就是在测另一件事。
-- **标记已解决**：按根因写标记，同根因的重复报错一起标记，重启不丢；已修的报错再次发生
-  仍以未读出现——标记藏的是历史，不是新证据。
-- **只看未解决**：藏掉已标记的分组，有标记后才出现这个按钮。
-
-每次修 bug 也顺手喂了这张表：`FS_EDIT_NOT_FOUND` 从「目标不存在」改成「锚点文本不存在」，
-`FS_AMBIGUOUS_EDIT` 从通用桶改成「锚点匹配到多处」——前者给的处方是错的。
-`tools/audit-error-summaries.mjs` 用真实会话日志回放同一套匹配器，签名改动是量出来的，不是猜的。
-
-## 使用说明面板
-
-顶栏最右边是「▸ 使用说明」，点开在下方展开两栏对照，逐个解释五个卡片动作与七个筛选控件；
-文案中英双语，跟着界面语言走。默认收起，点开才占地方。
 ## 数据范围
 
 面板只通过 Web 客户端已经持有的 Session 日志镜像（`session.eventSource`）读当前会话
 自己的事件窗口，加上会话级运行时通知。它不请求额外数据源、网络或宿主端点，也不往
 会话日志里写任何东西。唯一持久化的是本地已读水位，存在 `localStorage` 里本包的键下。
+
+另外每个会话还会存一份「已解决」标记（按根因分组键，上限 300 条，超出按时间淘汰）：
+标了已解决的报错会淡化并带绿色徽标，可以一键重新打开，也可以「只看未解决」过滤；
+同根因的报错若再次发生，依然会以未读状态冒出来，标记不会吞掉新证据。
+
+## 面板里的按钮
+
+顶栏最右边是「▸ 使用说明」按钮（悬停提示「每个按钮干什么」），点开在它下面展开两栏对照：单条报错卡片上的五个按钮
+（复制 / 发回对话 / 重跑此步 / 标记已解决 / 发送完整原文），以及顶栏与筛选里的控件
+（复制报告 / 使用说明本身 / 搜索 / 来源筛选 / 只看未解决 / 只看未读 / 全部已读 / 加载更早）。
+
+说明文字是中英双语，跟着界面语言走；默认收起，不占地方，展开后有最大高度、超出可滚动。
 
 ## 它住在哪
 
@@ -204,55 +418,3 @@ node tools/audit-error-summaries.mjs --self-test
 
 卸载插件会撤回 View 注册和行装饰；标签页消失，侧栏行回到它们自己的状态点。
 布局的其他部分不受影响。
-
-## 版本更新
-
-### 1.4.1（2026-11-19）
-
-- **失败只判一次**：turn 出错、工具失败、子智能体失败、命令失败四种判定收敛到同一个函数，卡片列表和侧栏提醒共用它；以后新增失败类型不会再出现「面板里有、侧栏却不见」。顺带修好侧栏提醒的缓存：它原本按错误的对象做键，缓存从未命中，每次重渲染都重算一遍。
-- **未读水位用同一把尺子**：子智能体记录按它在父会话里的排位（`orderSeq`）比较，不再用子会话自己的 `seq`。之前「只看未读」会把早已读过的子会话报错误判成未读；点「标记已解决」时还可能把水位跳到子会话的序号，把父会话之后真正的新报错一并吞掉。
-
-### 1.4.0（2026-11-17）
-
-- **子会话报错也能在线看**：面板主动发现当前会话派生的子智能体（结算通知 + 会话目录双路发现，含无通知的 workflow 子会话），打开其事件流，把子会话自己的 turn/tool 错误折叠成卡片，并标注「来自子智能体 xxxx」紧邻对应通知展示；子卡片「发送/重试」发回正确的子会话，且不影响父会话未读水位。
-- **每条归因都有处理建议**：补全归因表，43 条签名全部映射到专属 `next.*` 文案（中英双语），不再有大量归因落到「发回对话让模型读原始事件」的兜底；「下一步」行统一为「处理建议：」。
-
-### 1.3.0（2026-11-10）
-
-- **处理建议行**：归因下面多一行能直接照做的动作（如「余额不足」→ 充值或换一条路由），15 条高频成因各有专属处理建议，其余走兜底「发回对话，让模型读原始事件后定位」。
-- **中断与否一眼可见**：卡头标明「会话中断」或「单步失败，会话可继续」，先回答「还能不能接着干」。
-
-### 1.2.0（2026-11-09）
-
-- **归因表重做**：`CAUSES` 重排为「计费 → 限流 → 鉴权 → 请求体 → 网关 → 类型/语法 → 模块 → 代码运行 → 评审 → 文件系统 → 沙箱 → 编码 → 数据库 → 网络 → 资源」的顺序，改正 `403 insufficient balance` 被误判成「权限被拒」这类抢匹配；归因改为读完整原文与工具消息，不再只看摘要。
-- **发回对话带现场**：发回的提示里补上归因、会话 ID、事件 `seq`，并要求模型先用 `session_event_read` 读原始事件再下结论；工具失败还会带上原调用参数（`command`、`url`、`path` 等，含密钥字段的自动打码）。
-- **同根因归并**：分组键从「整条文案完全相同」改为「来源 + 归因 + 工具 + 路径」，同一根因的不同措辞不再各占一张卡。
-- **已解决标记与重跑此步**：卡片可标记已解决（按根因持久化，重启不丢、同根因一起标记），筛选行出现「只看未解决」；新增「重跑此步」，带原工具与原参数把这一步原样再跑一次。
-- **edit 类失败单独归因**：`FS_EDIT_NOT_FOUND`（锚点文本不存在）与 `FS_AMBIGUOUS_EDIT`（锚点匹配到多处）不再落进通用的「目标不存在」，处方不再指错方向。
-- **截断改头尾保留**：原始错误过长时保留头部 60% 与尾部 40%，栈尾的根因不再被切掉。
-- **使用说明面板**：顶栏最右边新增「▸ 使用说明」，展开逐个解释五个卡片动作与七个筛选控件，中英双语，可折叠。
-### 1.1.1（2026-11-09）
-
-- **重复合并卡片时间带标签**：时间区间显示为「最早 … · 最新 …」，一眼区分首末次发生。
-- **全部已读**：过滤行新增按钮，一键把本会话未读清零，不再需要逐张卡片点。
-- **关键词过滤**：新增搜索框，可匹配错误文案、完整原文、工具名、路径、错误码；空格分隔多个关键词需同时满足（AND），不同关键词可命中不同字段；可与来源筛选、只看未读叠加。过滤行下方常驻一行小字说明可用条件。
-- **水位线自动清理**：已读水位线按插入序只保留最近 200 个会话，自动淘汰最旧的，localStorage 不再无限增长。
-- **相对时间提示**：卡片时间戳悬停显示「N 分钟前 / N 小时前 / N 天前」。
-- **复制 Markdown 报告**：一键把当前筛选后的报错视图合成为 Markdown 报告（含原因解释与截断的原始错误），方便粘贴到新会话分析。
-- **误报过滤**：dsh-ops cordis 模式的工具改名接管提示（MODE_REPLACEMENT）不再被记为失败。
-
-### 1.1.0（2026-11-09）
-
-- **报错原因识别**：新增连接重置类（ECONNRESET / EPIPE / unexpected EOF / fetch failed 等）与请求中止类签名的识别，卡片直接给出一句话原因（如「网络抖动或上游断流，直接重试即可」）。
-- **事件风暴节流**：错误密集产生时，失败列表的折叠计算按 200ms 合并重算，单条错误仍然即时上屏，长会话不再每次事件都全量重扫。
-- **列表渲染窗口**：面板默认只渲染最近 50 张卡片，底部「显示更早的 N 条」按需加载，超长会话不再一次性挂载全部卡片。
-- **未读基线播种**：侧栏告警与面板都会在首次见到某个会话时静默播种已读水位线——安装插件后历史报错不再被标为未读，只有之后新产生的报错才提醒。
-- **细节**：运行时通知的观察时间表加上限；重复错误的 seq 列表只列前 5 个并附总数；README 改为纯中文。
-
-### 1.0.1（2026-11-07）
-
-- 声明 `engines.dsh`，补充环境要求章节；`locale` 以 glob 导出；审计脚本随包发布，README 增加 npm 安装方式。
-
-### 1.0.0（2026-11-05）
-
-- 首个版本：回合错误、工具失败、命令失败、子智能体异常、运行时通知五类来源折叠为可复制、可发回对话的卡片，最新在前，重复合并 ×N；侧栏会话行未读告警；中英双语界面。
