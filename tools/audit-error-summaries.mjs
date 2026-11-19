@@ -7,7 +7,7 @@
  * exactly what the card and the outgoing prompt would say — no tokens, no clicks.
  *
  * It mirrors `describeError` / `foldErrors` in
- * `.dsh-created-plugins/ad2ab3ad-8a5c-4e88-a7bf-ee0bb5b23776/client.js`.
+ * `client.js` in this repository.
  * When that plugin's extraction changes, change this file in the same commit.
  *
  * Usage:

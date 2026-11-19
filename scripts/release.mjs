@@ -21,6 +21,7 @@ import fs from 'node:fs';
 import net from 'node:net';
 import path from 'node:path';
 import readline from 'node:readline/promises';
+import os from 'node:os';
 
 const REGISTRY = 'https://registry.npmjs.org';
 const PKG = '@alb233/dsh-error-monitor';
@@ -37,6 +38,103 @@ const PROXIES = [
 const REGISTRY_WAIT_MS = 180_000;
 /** Files a release may pick up from the plugin directory without a manual commit. */
 const SYNCED_FILES = new Set(['client.js', 'README.md']);
+
+/* ---- privacy gate: nothing machine-specific may leave this repository ---- */
+const BINARY = /\.(png|jpe?g|gif|webp|ico|mp4|mov|zip|tgz|gz|woff2?|ttf|pdf)$/i;
+const ALLOWED_EMAILS = /@users\.noreply\.github\.com$|@example\.(com|org)$/i;
+const homeUser = path.basename(os.homedir());
+const PRIVACY = [
+  { re: /[A-Za-z]:\\Users\\[^\\\s"']+/i, why: 'Windows home path' },
+  { re: /\/Users\/[A-Za-z0-9._-]+\//, why: 'macOS home path' },
+  { re: /\/home\/[A-Za-z0-9._-]+\//, why: 'Linux home path' },
+  { re: /\.dsh-created-plugins[\\/]/, why: 'local DSH plugin directory' },
+  { re: /\.dsh[\\/]profiles[\\/]/, why: 'local DSH profile directory' },
+  { re: /AppData[\\/]/i, why: 'Windows AppData path' },
+  { re: /npm_[A-Za-z0-9]{36}/, why: 'npm token' },
+  { re: /ghp_[A-Za-z0-9]{36}/, why: 'GitHub token' },
+  { re: /github_pat_[A-Za-z0-9_]{20,}/, why: 'GitHub token' },
+  { re: /sk-[A-Za-z0-9]{20,}/, why: 'API key' },
+  { re: /AKIA[0-9A-Z]{16}/, why: 'AWS key' },
+];
+if (homeUser.length >= 3) {
+  const escaped = homeUser.replace(/[^A-Za-z0-9_-]/g, '');
+  PRIVACY.push({ re: new RegExp('\\b' + escaped + '\\b', 'i'), why: 'this machine user name' });
+}
+
+/** Every file npm would put in the tarball, plus package.json itself. */
+function publishFiles() {
+  const out = new Set();
+  const add = (p) => {
+    if (fs.existsSync(p) && fs.statSync(p).isFile()) out.add(p);
+  };
+  const walk = (p) => {
+    if (!fs.existsSync(p)) return;
+    if (fs.statSync(p).isFile()) {
+      add(p);
+      return;
+    }
+    for (const name of fs.readdirSync(p)) walk(path.join(p, name));
+  };
+  for (const entry of pkg.files || []) {
+    if (entry.includes('*')) {
+      const dir = path.dirname(entry);
+      const pattern = new RegExp('^' + path.basename(entry).replace(/[.+^$()|[\]\\]/g, '\\$&').replace(/\*/g, '.*') + '$');
+      if (fs.existsSync(dir)) for (const name of fs.readdirSync(dir)) if (pattern.test(name)) add(path.join(dir, name));
+    } else {
+      walk(entry);
+    }
+  }
+  add('package.json');
+  return out;
+}
+
+function scanPrivacy(files) {
+  const hits = [];
+  for (const file of files) {
+    if (BINARY.test(file)) continue;
+    let text;
+    try {
+      text = fs.readFileSync(file, 'utf8');
+    } catch {
+      continue;
+    }
+    const lines = text.split('\n');
+    for (let i = 0; i < lines.length; i += 1) {
+      const line = lines[i];
+      for (const rule of PRIVACY) {
+        if (rule.re.test(line)) hits.push(file + ':' + (i + 1) + '  ' + rule.why + '  ' + line.trim().slice(0, 120));
+      }
+      const emails = line.match(/[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}/g) || [];
+      for (const email of emails) {
+        if (!ALLOWED_EMAILS.test(email)) hits.push(file + ':' + (i + 1) + '  email address  ' + email);
+      }
+    }
+  }
+  return hits;
+}
+
+/** Refuse to publish anything that names this machine, its user, or a secret. */
+function privacyGate() {
+  const files = publishFiles();
+  for (const extra of [path.join(pluginDir, 'client.js'), path.join(pluginDir, 'README.md')]) {
+    if (fs.existsSync(extra)) files.add(extra);
+  }
+  const hits = scanPrivacy(files);
+  if (hits.length === 0) {
+    console.log('privacy   ' + files.size + ' publishable file(s) clean');
+    return;
+  }
+  const report = hits.slice(0, 20).join('\n  ');
+  if (dryRun) {
+    warn('privacy scan found ' + hits.length + ' hit(s) (a real run would stop):\n  ' + report);
+    return;
+  }
+  die(
+    'privacy scan found ' + hits.length + ' hit(s) in files that would be published:\n  ' +
+      report +
+      '\nRemove them before releasing.',
+  );
+}
 
 const argv = process.argv.slice(2);
 const flag = (name) => argv.includes('--' + name);
@@ -216,6 +314,7 @@ if (dirty !== '') {
 }
 
 await ensureOrigin();
+privacyGate();
 const head = execFileSync('git', ['rev-parse', 'HEAD'], { encoding: 'utf8' }).trim();
 const upstream = execFileSync('git', ['rev-parse', 'origin/main'], { encoding: 'utf8' }).trim();
 if (head !== upstream) die('local main is not origin/main; run git pull --ff-only first');
