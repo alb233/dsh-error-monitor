@@ -80,7 +80,7 @@ const cases = [
   // Mined from 633 local sessions (1669 tool errors): the signatures that
   // recurred but had no cause line yet.
   ['Error: cannot edit "D:\\p\\a.md": file changed since it was read — re-read the file, then retry', 'cause.stale'],
-  ['Error: source path must stay inside the workspace: C:/Users/x/out.md', 'cause.pathguard'],
+  ['Error: source path must stay inside the workspace: C:/work/out.md', 'cause.pathguard'],
   ['Error: dsh auto-denied this action: approval prompts are disabled in this session, so nobody was asked.', 'cause.approvaloff'],
   ['Error: dsh-ops cordis mode replaced the official tool read with ops_inspect_local_file; call it instead', 'cause.modeReplace'],
   ['Error: unknown tool "bash"', 'cause.unknownTool'],
