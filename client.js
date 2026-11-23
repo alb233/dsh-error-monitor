@@ -10,6 +10,8 @@ window.__ModuleLoader__.load({
     const TAB_TYPE_ID = PACKAGE;
     const SEEN_PREFIX = PACKAGE + '.seen.';
     const RESOLVED_PREFIX = PACKAGE + '.resolved.';
+// Ledger of verified-fix markers already applied, so un-marking a card sticks.
+const AUTO_PREFIX = PACKAGE + '.autofix.';
     const VIEW_ORDER = 50;
 
     /* ---------------------------------------------------------------- locale */
@@ -30,6 +32,8 @@ window.__ModuleLoader__.load({
         'panel.loadingOlder': 'Loading…',
         'panel.hasMore': 'Earlier records are not loaded yet',
         'panel.showMore': 'Show {n} earlier entries',
+  'panel.notes': '{n} retried by the agent itself',
+  'panel.notesHint': 'The agent usually retries these on its own, so usually nothing to do; open to read the raw errors.',
         'banner.new': '{n} new since you last looked',
         'banner.markRead': 'Mark as read',
         'banner.latest': 'Latest error',
@@ -41,17 +45,20 @@ window.__ModuleLoader__.load({
         'docs.toggle': 'How to use this panel',
         'docs.toggleHint': 'what each button does',
         'docs.groupCard': 'On an error card',
+  'docs.note.name': 'Folded retries',
+  'docs.note.desc': 'A single-step failure the agent can still recover from is not shown in the list; it waits in a fold at the bottom (one line, opened to full cards) and never raises the new-error banner. Turn errors and three-time loops stay in the list.',
         'docs.groupBar': 'Top bar and filters',
         'docs.copy.name': 'Copy',
         'docs.copy.desc': 'Copies this error as plain text, cause and arguments included, for pasting somewhere else.',
-        'docs.send.name': 'Send to chat',
-        'docs.send.desc': 'Diagnosis: sends the summary, cause, session id and seq into the conversation so the agent reads the raw event before judging.',
-        'docs.retry.name': 'Retry step',
-        'docs.retry.desc': 'Reproduction: resends the same tool with the same arguments, so the agent repeats that one step as it was.',
         'docs.resolve.name': 'Mark resolved',
         'docs.resolve.desc': 'Marks this cause as fixed; every repeat of it follows. Click again to reopen. The mark survives a restart.',
-        'docs.full.name': 'Send full text',
-        'docs.full.desc': 'Also sends the complete raw error, for cases a summary cannot explain.',
+        'docs.more.name': 'More',
+        'docs.more.desc': 'Holds the quieter options: Diagnose only, Rerun this step, and Send full raw (which costs the most tokens).',
+        'docs.fix.name': 'Fix it now',
+        'docs.fix.desc': 'Repair: tells the agent to read the raw event, apply the fix for this cause, then rerun the same call to verify. When it reports that verified fix, the card ticks itself off. Use it when you want the step repaired, not explained.',
+        'docs.fixcmd.name': 'Repair commands',
+        'docs.fixcmd.desc':
+          'Terminal commands for this cause, already filled in from the failure — ready to copy and run. Read-only checks, except when the fix is an install. Nothing is sent to the model.',
         'docs.report.name': 'Copy report',
         'docs.report.desc': 'Turns the current filtered view into a Markdown report on the clipboard, ready to hand to a fresh session.',
         'docs.search.name': 'Search',
@@ -90,6 +97,7 @@ window.__ModuleLoader__.load({
         'item.cause': 'Cause: {cause}',
         'item.next': 'Suggested fix: {next}',
         'item.fatal': 'Turn aborted',
+        'item.noteBadge': 'Single-step',
         'item.recover': 'Step failed — you can continue',
         'next.quota': 'Top up the account or switch route, then rerun this step',
         'next.rate': 'Wait 30–60s and rerun; repeated hits mean throttling — different arguments will not help',
@@ -98,6 +106,8 @@ window.__ModuleLoader__.load({
         'next.editmatch': 'Read the file again, then copy the anchor from that fresh read instead of rewriting it from memory',
         'next.editambig': 'Lengthen the anchor until it appears once (include the surrounding line); do not widen it with replace_all',
         'next.sandbox': 'Put the file inside the workspace, or rerun this step with escalated permission',
+        'next.pathguard': 'Point the call at a path inside the workspace (relative paths work), or move the file there first',
+        'next.approvaloff': 'This needs an approval the session cannot ask for — enable approvals, or take another route',
         'next.denied': 'Confirm the path is inside the allowed scope, then decide whether to escalate',
         'next.timeout': 'Do less in one step (fewer commands, smaller reads) and rerun',
         'next.payload': 'The request shape was rejected — fix the arguments, not the model',
@@ -138,6 +148,10 @@ window.__ModuleLoader__.load({
           'Do not send it again: this provider cannot produce a usable tool call here — switch model or route for this session',
         'next.safetynet': 'Read the rule it names: rename or move the path out of sensitive scope, or make the call carry a real tool name — an identical retry changes nothing',
         'next.notread': 'Read the file first, then edit from what you just read',
+        'next.stale': 'Re-read the file, then retry the edit with an anchor copied from that read',
+        'next.unknownTool': 'Use a tool this profile actually has — the same name will be rejected again',
+        'next.modeReplace': 'Call the replacement tool named in the message, or switch back to the standard mode',
+        'next.askcancelled': 'Nothing is broken — ask again if the answer is still wanted',
         'next.invalidargs': 'Open the tool schema and fill the argument it names — the model is fine, the call is not',
         'next.compress': 'Call acp_status for live refs, then compress a range that still exists',
         'next.vision': 'Switch to a model that sees images, or ask the user to paste the text instead of the picture',
@@ -147,6 +161,7 @@ window.__ModuleLoader__.load({
         'next.redirect': 'Request the URL it points at, not the redirector',
         'item.args': 'Call arguments: {args}',
         'item.resolved': 'Resolved',
+        'item.resolvedHint': 'Ticked by you, or by the verified-fix report the agent sends back',
         'item.resolve': 'Mark resolved',
         'item.unresolve': 'Reopen',
         'item.retry': 'Rerun this step',
@@ -201,6 +216,12 @@ window.__ModuleLoader__.load({
         'cause.invalidargs': 'The call was rejected before it ran — a required argument is missing or malformed',
         'cause.compress': 'The compression anchors no longer exist — those refs have aged out of the context window',
         'cause.vision': 'The image was refused — this model, or this machine, has no vision capability',
+        'cause.stale': 'The file changed after it was read — the edit was refused instead of applied to a stale copy',
+        'cause.unknownTool': 'This profile has no tool by that name',
+        'cause.modeReplace': 'A plugin mode replaced the official tool with its own, so the old name no longer exists',
+        'cause.askcancelled': 'You cancelled the question, so nothing was answered',
+        'cause.pathguard': 'The path sits outside the allowed root, so the tool refused it',
+        'cause.approvaloff': 'Approval prompts are disabled in this session, so the action was auto-denied without asking',
         'cause.asarpath': 'The path runs into an app.asar archive, which the search tool cannot read as a directory — nothing was actually searched',
         'cause.state': 'The state machine refused the move — the target state is not reachable from the current one',
         'cause.webnet': 'The fetch never produced a response — it failed before any HTTP status existed (DNS, proxy, TLS or an unreachable host)',
@@ -213,11 +234,20 @@ window.__ModuleLoader__.load({
         'item.latest': 'latest {time}',
         'item.seqs': 'seqs={seqs}',
         'item.raw': 'Raw error',
+        'item.fix': 'Fix it now',
+        'item.fixHint': 'Read the raw event, apply the fix, then rerun this call to verify',
+        'item.fixCmd': 'Repair commands',
+        'item.fixCmdHint': 'Filled in from the error — paste and run',
+        'item.fixCopy': 'Copy commands',
+        'item.fixCopied': 'Copied',
+        'item.fixCopyFailed': 'Copy failed',
         'item.copy': 'Copy details',
         'item.copied': 'Copied',
         'item.copyFailed': 'Copy failed',
-        'item.send': 'Send to chat',
+        'item.send': 'Diagnose only',
         'item.sendFull': 'Send full raw',
+        'item.more': 'More',
+        'item.moreHint': 'Less-used actions',
         'item.sending': 'Sending…',
         'item.sent': 'Sent to chat',
         'item.sendFailed': 'Send failed',
@@ -229,6 +259,9 @@ window.__ModuleLoader__.load({
           'I hit an error in this session. Please analyse the cause and propose a fix.\n\nSource: {source}\nTurn: {turn}\nTime: {time}\nCode: {code}\nLikely cause: {cause}\nArguments: {args}\nSession id: {sessionId}\nSession event seq: {seq}\nRaw error:\n```\n{raw}\n```\n\nIf the raw text above is still cut off, read the original event with session_event_read(seq={seq}) (add session_id={sessionId} if needed) before concluding.',
         'send.retry':
           'Please re-run exactly this step of the session and report the result.\n\nSource: {source}\nTurn: {turn}\nTool: {tool}\nArguments: {args}\nCode: {code}\nLikely cause: {cause}\nError: {summary}\nSession id: {sessionId}\nSession event seq: {seq}\n\nUse the arguments above verbatim — changing them would test something else. If the step succeeds this time, say what changed; if it fails again, read the original event with session_event_read(seq={seq}) and compare the two errors before guessing.',
+        'send.fix':
+          'I hit an error in this session. Fix it now — do not stop at a diagnosis.\n\nSource: {source}\nTurn: {turn}\nTool: {tool}\nArguments: {args}\nCode: {code}\nLikely cause: {cause}\nSuggested fix: {next}\nError: {summary}\nSession id: {sessionId}\nSession event seq: {seq}\nRepair commands:\n{fixes}\n\nWork in this order:\n1. Read the original event with session_event_read(seq={seq}) (add session_id={sessionId} if needed) and confirm the real error and the exact place it failed: file, line, port, process or argument.\n2. Apply the fix directly — edit the file, change the argument, stop the blocking process, install the missing module or correct the path. If it needs a permission escalation or touches a file outside the workspace, say so before acting.\n3. Rerun exactly this call to verify, with the same tool and the same arguments; do not swap in a different test.\n4. Report three things: what changed, the verification result, and — if it still fails — where to look next. If this should not be repaired automatically (deletes, privacy, an external account), stop and state only what the user has to do.\n5. If — and only if — the rerun succeeded, end the reply with a line of its own: ERROR-MONITOR-FIXED seq={seq} (verbatim). The monitor reads that line to tick this card off; never write it when the fix is unverified or still failing.',
+        'send.fixNone': '(no ready-made command for this cause — derive one from the suggested fix above)',
         'send.turn': '{n}',
         'send.unknown': 'unknown',
         'new.tag': 'NEW',
@@ -248,6 +281,8 @@ window.__ModuleLoader__.load({
         'panel.loadingOlder': '加载中…',
         'panel.hasMore': '更早的记录尚未加载',
         'panel.showMore': '显示更早的 {n} 条',
+  'panel.notes': '{n} 条模型已自行重试',
+  'panel.notesHint': '模型一般会自己重试，通常不用管；想看原始报错再展开。',
         'banner.new': '新报错 {n} 条',
         'banner.markRead': '标记已读',
         'banner.latest': '最新报错',
@@ -259,17 +294,19 @@ window.__ModuleLoader__.load({
         'docs.toggle': '使用说明',
         'docs.toggleHint': '每个按钮干什么',
         'docs.groupCard': '单条报错卡片上',
+  'docs.note.name': '折叠的自愈重试',
+  'docs.note.desc': '模型还能自己纠正的单步失败不进列表，只收在底部一个折叠区里（默认一行，展开后是完整卡片），也不计入“新报错”提醒。中断整轮的错误和重复三次以上的循环留在列表里。',
         'docs.groupBar': '顶栏与筛选',
         'docs.copy.name': '复制',
         'docs.copy.desc': '把这条报错的详情文本复制走，含归因与调用参数，方便贴到别处。',
-        'docs.send.name': '发回对话',
-        'docs.send.desc': '诊断：把摘要、归因、会话 ID 与 seq 发进对话，让模型先读原始事件再下结论。',
-        'docs.retry.name': '重跑此步',
-        'docs.retry.desc': '复现：带原工具名和原调用参数，请模型把这一步原样再跑一次。',
         'docs.resolve.name': '标记已解决',
         'docs.resolve.desc': '给这个根因打上已解决，同根因的重复报错一起标记；再点一次撤销，重启不丢。',
-        'docs.full.name': '发送完整原文',
-        'docs.full.desc': '把完整的原始错误也一起发进对话，摘要讲不清时用。',
+        'docs.more.name': '更多',
+        'docs.more.desc': '收起次要动作：只诊断（只分析原因、不动文件）、重跑此步（原样再跑一次）、发送完整原文（把完整 raw 一起发出，最费 token）。',
+        'docs.fix.name': '直接修复',
+        'docs.fix.desc': '修复：要求模型先读原始事件，按这个根因动手改，再原样重跑这一步验证；验证通过它会回报，卡片随即自己标成已解决。要的是修好，不是再分析一遍。',
+        'docs.fixcmd.name': '修复命令',
+        'docs.fixcmd.desc': '针对这个根因的终端命令，参数已从报错里填好，可直接复制运行；除装依赖外都是只读检查。不消耗模型 token。',
         'docs.report.name': '复制报告',
         'docs.report.desc': '把当前筛选结果整理成 Markdown 报告复制到剪贴板，可整段交给新会话。',
         'docs.search.name': '搜索',
@@ -308,6 +345,7 @@ window.__ModuleLoader__.load({
         'item.cause': '原因：{cause}',
         'item.next': '处理建议：{next}',
         'item.fatal': '会话中断',
+        'item.noteBadge': '单步失败',
         'item.recover': '单步失败，会话可继续',
         'next.quota': '充值或换一条可用路由，再重跑这一步',
         'next.rate': '等 30–60 秒再重跑；连续触发就是被限流，换参数没用',
@@ -316,6 +354,8 @@ window.__ModuleLoader__.load({
         'next.editmatch': '先重新读文件再改；锚点从刚读到的原文复制，别凭记忆写',
         'next.editambig': '把锚点加长到只出现一次（带上前后行），别用 replace_all 硬覆盖',
         'next.sandbox': '把文件放进工作区内，或给这一步提权后重跑',
+        'next.pathguard': '改成工作区内的路径（相对路径即可），或先把文件放进来',
+        'next.approvaloff': '这件事需要审批而本会话问不了——开启审批，或换一条不需要审批的路',
         'next.denied': '先确认路径在允许范围内，再决定要不要提权',
         'next.timeout': '把单步做小一点（少跑几条命令、少读几个文件）再重跑',
         'next.payload': '请求形状被拒：改参数，不是换模型',
@@ -355,6 +395,10 @@ window.__ModuleLoader__.load({
         'next.toolname': '别重发：是这个 provider 生不出可用的工具调用，本会话换模型或换路由',
         'next.safetynet': '看它点名的规则：把路径改名或挪出敏感范围，或让调用带上真实的工具名——原样重试不会有变化',
         'next.notread': '先 read 这个文件，再按刚读到的内容改',
+        'next.stale': '重新读一次文件，再用这次读到的原文当锚点重试',
+        'next.unknownTool': '换成当前 profile 真有的工具，同一个名字再发一次还是会被拒',
+        'next.modeReplace': '调用消息里给出的替代工具，或切回标准模式',
+        'next.askcancelled': '没有坏东西——还想问就再问一次',
         'next.invalidargs': '打开工具 schema 补上它点名的那一项：模型没问题，是这次调用缺东西',
         'next.compress': '先 acp_status 拿最新 refs，再压缩还存在的范围',
         'next.vision': '换有视觉能力的模型，或让用户把图里的文字贴出来',
@@ -364,6 +408,7 @@ window.__ModuleLoader__.load({
         'next.redirect': '直接请求它指向的 URL，不要请求跳转入口',
         'item.args': '调用参数：{args}',
         'item.resolved': '已解决',
+        'item.resolvedHint': '你点的，或模型验证通过后回报时自动标的',
         'item.resolve': '标记已解决',
         'item.unresolve': '重新打开',
         'item.retry': '重跑此步',
@@ -418,6 +463,12 @@ window.__ModuleLoader__.load({
         'cause.invalidargs': '调用在执行前被拒：缺少必填参数，或参数形状不对',
         'cause.compress': '压缩锚点已失效——那些 ref 已经被挤出上下文窗口',
         'cause.vision': '图片被拒：当前模型或本机没有视觉能力',
+        'cause.stale': '文件在读取之后又被改过，编辑被拒绝，而不是写到过期副本上',
+        'cause.unknownTool': '当前 profile 里没有这个工具名',
+        'cause.modeReplace': '某个插件模式把官方工具换成了自己的，旧工具名已不存在',
+        'cause.askcancelled': '你自己取消了提问，没有作答',
+        'cause.pathguard': '路径在允许的根目录之外，工具直接拒了',
+        'cause.approvaloff': '本会话禁用了审批提示，所以动作被自动拒绝，没有问过你',
         'cause.asarpath': '路径落在 app.asar 归档里，搜索工具没法当目录读——这次其实什么都没搜到',
         'cause.state': '状态机拒绝了这次流转：从当前状态到不了目标状态',
         'cause.webnet': '抓取没拿到任何响应：在 HTTP 状态出现之前就失败了（DNS、代理、TLS 或主机不可达）',
@@ -430,11 +481,20 @@ window.__ModuleLoader__.load({
         'item.latest': '最新 {time}',
         'item.seqs': 'seq={seqs}',
         'item.raw': '原始错误',
+        'item.fix': '直接修复',
+        'item.fixHint': '先读原始事件，再动手修，然后原样重跑这一步验证',
+        'item.fixCmd': '修复命令',
+        'item.fixCmdHint': '参数已从报错里填好，可直接粘贴运行',
+        'item.fixCopy': '复制命令',
+        'item.fixCopied': '已复制',
+        'item.fixCopyFailed': '复制失败',
         'item.copy': '复制详情',
         'item.copied': '已复制',
         'item.copyFailed': '复制失败',
-        'item.send': '发回对话',
+        'item.send': '只诊断',
         'item.sendFull': '发送完整原文',
+        'item.more': '更多',
+        'item.moreHint': '不常用的动作',
         'item.sending': '发送中…',
         'item.sent': '已发回对话',
         'item.sendFailed': '发送失败',
@@ -446,11 +506,17 @@ window.__ModuleLoader__.load({
           '我在本会话遇到一次报错，请帮我分析原因并给出处理方案。\n\n来源：{source}\n轮次：{turn}\n时间：{time}\n错误码：{code}\n初步归因：{cause}\n调用参数：{args}\n会话 ID：{sessionId}\n会话事件 seq：{seq}\n原始错误：\n```\n{raw}\n```\n\n若上面的原文仍被截断，先用 session_event_read(seq={seq})（必要时加 session_id={sessionId}）读出原始事件再下结论。',
         'send.retry':
           '请原样重跑本会话的这一步骤，并说明结果。\n\n来源：{source}\n轮次：{turn}\n工具：{tool}\n调用参数：{args}\n错误码：{code}\n初步归因：{cause}\n错误：{summary}\n会话 ID：{sessionId}\n会话事件 seq：{seq}\n\n参数请照原文使用，改了就是在测另一件事。若这次成功，说明是什么变了；若仍失败，先用 session_event_read(seq={seq}) 读原始事件，对比两次报错的差异再判断。',
+        'send.fix':
+          '我在本会话遇到一次报错，请直接修复，不要停在诊断。\n\n来源：{source}\n轮次：{turn}\n工具：{tool}\n调用参数：{args}\n错误码：{code}\n初步归因：{cause}\n处理建议：{next}\n错误摘要：{summary}\n会话 ID：{sessionId}\n会话事件 seq：{seq}\n修复命令：\n{fixes}\n\n按这个顺序做：\n1. 先 session_event_read(seq={seq}) 读原始事件（需要时加 session_id={sessionId}），确认真实报错和失败的具体位置：文件、行号、端口、进程或参数。\n2. 直接执行修复：改文件、改参数、停掉占用进程、补装缺失模块或纠正路径。需要提权、或要动工作区外的文件，先说清再动手。\n3. 修完后原样重跑这一次调用验证——同一个工具、同一份参数，别换成另一个测试。\n4. 汇报三件事：改了什么、验证结果、如果还失败下一步该看哪里。若判断不该在本会话自动修（涉及删除、隐私、外部账号），停下来说清需要用户做什么。\n5. 只有重跑确认成功时，才在回复最后单独写一行：ERROR-MONITOR-FIXED seq={seq}（原样照抄）。监控插件读这一行把卡片标为已解决；没验证过、或还失败，不要写。',
+        'send.fixNone': '（这个根因没有现成命令，按上面的处理建议自行推导）',
         'send.turn': '第 {n} 轮',
         'send.unknown': '未知',
         'new.tag': '新',
       },
     };
+
+    /** One shared placeholder pattern: a card renders hundreds of strings per pass. */
+    const PLACEHOLDER = /\{(\w+)\}/g;
 
     function translator(locale) {
       const table = MESSAGES[locale] || MESSAGES.en;
@@ -459,7 +525,7 @@ window.__ModuleLoader__.load({
         if (text === undefined) text = MESSAGES.en[key];
         if (text === undefined) return key;
         if (params === undefined) return text;
-        return text.replace(/\{(\w+)\}/g, (whole, name) =>
+        return text.replace(PLACEHOLDER, (whole, name) =>
           Object.prototype.hasOwnProperty.call(params, name) ? String(params[name]) : whole,
         );
       };
@@ -703,6 +769,36 @@ window.__ModuleLoader__.load({
       writeResolved(sessionId, map);
     }
 
+    /**
+     * Which verified-fix markers were already applied to which group. The ledger
+     * exists for one reason: without it, un-marking a card would be undone on the
+     * next render — the old marker would look fresh again and the card would close
+     * itself under the user's hand. A group only takes a marker once per seq.
+     */
+    const AUTO_CAP = 300;
+
+    function readAutoFix(sessionId) {
+      const raw = readStoreString(AUTO_PREFIX + String(sessionId));
+      if (raw === null) return {};
+      try {
+        const parsed = JSON.parse(raw);
+        return isRecord(parsed) ? parsed : {};
+      } catch {
+        return {};
+      }
+    }
+
+    function writeAutoFix(sessionId, ledger) {
+      let keys = Object.keys(ledger);
+      if (keys.length > AUTO_CAP) {
+        keys = keys.slice(keys.length - AUTO_CAP);
+        const kept = {};
+        for (const key of keys) kept[key] = ledger[key];
+        ledger = kept;
+      }
+      writeStoreString(AUTO_PREFIX + String(sessionId), keys.length === 0 ? null : JSON.stringify(ledger));
+    }
+
     /** The resolved marks of one Session, re-read whenever they are written. */
     function useResolvedMap(sessionId) {
       const raw = useStoreString(RESOLVED_PREFIX + String(sessionId));
@@ -863,6 +959,7 @@ window.__ModuleLoader__.load({
       );
       const settled = useThrottledValue(feedInput, 200);
       const records = useMemo(() => collectRecords(settled.entries, settled.session), [settled]);
+      const fixedSeqs = useMemo(() => fixedSeqsIn(settled.entries), [settled.entries]);
       const topSeq = records.length === 0 ? 0 : records[0].seq;
       const seenKey = SEEN_PREFIX + String(sessionId);
       const seen = useSeenValue(seenKey);
@@ -994,6 +1091,7 @@ window.__ModuleLoader__.load({
         session,
         records,
         childRecords,
+        fixedSeqs,
         topSeq,
         seen,
         unread,
@@ -1013,23 +1111,38 @@ window.__ModuleLoader__.load({
     /**
      * The failure signatures only. This is the fold without messages, raw payloads
      * or cause attribution, because the sidebar needs a count and nothing else.
+     * Failures the agent recovers from on its own are left out unless they repeat
+     * into a loop, so a session row lights up when something actually stopped.
      */
     function badgeScan(snapshot) {
-      if (!isRecord(snapshot)) return { seqs: [], texts: [] };
+      if (!isRecord(snapshot)) return { seqs: [], texts: [], top: 0 };
       const cached = BADGE_SCAN.get(snapshot);
       if (cached !== undefined) return cached;
       const entries = Array.isArray(snapshot.entries) ? snapshot.entries : [];
-      const seqs = [];
+      const items = [];
       const texts = [];
+      let top = 0;
       for (const entry of entries) {
         const event = durableEvent(entry);
         if (event === undefined) continue;
         const failure = failureSignature(event);
         if (failure === undefined) continue;
-        seqs.push(failure.seq);
+        items.push(failure);
         texts.push(failure.text);
+        if (failure.seq > top) top = failure.seq;
       }
-      const result = { seqs, texts };
+      const counts = new Map();
+      for (const item of items) {
+        const key = item.source + '\u0000' + item.text;
+        counts.set(key, (counts.get(key) ?? 0) + 1);
+      }
+      const seqs = [];
+      for (const item of items) {
+        if (item.source === 'turn' || counts.get(item.source + '\u0000' + item.text) >= LOOP_MIN_COUNT) {
+          seqs.push(item.seq);
+        }
+      }
+      const result = { seqs, texts, top };
       BADGE_SCAN.set(snapshot, result);
       return result;
     }
@@ -1045,8 +1158,7 @@ window.__ModuleLoader__.load({
       const sessionSnapshot = useStoreValue(session !== undefined ? session : undefined);
       const seen = useSeenValue(SEEN_PREFIX + String(sessionId));
       const scan = useMemo(() => badgeScan(entriesSnapshot), [entriesSnapshot]);
-      let parentTop = 0;
-      for (const seq of scan.seqs) if (seq > parentTop) parentTop = seq;
+      const parentTop = scan.top;
       const notice =
         isRecord(sessionSnapshot) && typeof sessionSnapshot.lastAgentError === 'string'
           ? sessionSnapshot.lastAgentError.trim()
@@ -1296,10 +1408,14 @@ window.__ModuleLoader__.load({
       // and the block — not the call — is what the reader can act on.
       { key: 'cause.safetynet', re: /CC Safety Net|BLOCKED by CC Safety Net/i },
       { key: 'cause.toolname', re: /unknown tool ""|unknown tool "[^"]*[({]/i },
+      { key: 'cause.unknownTool', re: /unknown tool "(?!")[^"]+"|UNKNOWN_TOOL/i },
+      { key: 'cause.askcancelled', re: /ASK_CANCELLED|user cancelled ask_user_question/i },
       { key: 'cause.notread', re: /file has not been read|FS_NOT_OBSERVED|has not been read yet/i },
-      { key: 'cause.invalidargs', re: /invalid arguments|INVALID_ARGS|missing required (property|parameter)/i },
-      { key: 'cause.compress', re: /cannot be anchored|Compression FAILED|COMPRESS_ANCHOR/i },
-      { key: 'cause.vision', re: /does not support image|No vision provider|vision provider is not set/i },
+      { key: 'cause.stale', re: /file changed since it was read|FS_STALE_VERSION/i },
+      { key: 'cause.invalidargs', re: /invalid arguments|INVALID_ARGS|missing required (property|parameter)|rejected input: "[^"]+" must be/i },
+      { key: 'cause.modeReplace', re: /mode replaced the official tool|MODE_REPLACEMENT/i },
+      { key: 'cause.compress', re: /cannot be anchored|Compression FAILED|COMPRESS_ANCHOR|Compression refused|no net shrink/i },
+      { key: 'cause.vision', re: /does not support image|No vision provider|vision provider is not set|does not declare image/i },
       { key: 'cause.asarpath', re: /\.asar[\\/]|app\.asar/i },
       { key: 'cause.state', re: /非法闭环迁移|状态必须|status 必须是|invalid (status )?transition/i },
       { key: 'cause.redirect', re: /cross-origin redirect|is not followed automatically/i },
@@ -1308,7 +1424,7 @@ window.__ModuleLoader__.load({
       { key: 'cause.webnet', re: /web fetch failed|TypeError: fetch failed/i },
       { key: 'cause.quota', re: /ACCOUNT_QUOTA|insufficient balance|insufficient_quota|quota exceeded|billing_error|余额不足/i },
       { key: 'cause.rate', re: /(?<![0-9])(429|424)(?![0-9])|Too Many Requests|rate[ _-]?limit|bili_throttle|throttl|限流/i },
-      { key: 'cause.auth', re: /(?<![0-9])401(?![0-9])|Unauthorized|authentication required|invalid api key|api key [^.\n]*is invalid|incorrect api key/i },
+      { key: 'cause.auth', re: /(?<![0-9])401(?![0-9])|Unauthorized|authentication required|invalid api key|api key [^.\n]*is invalid|incorrect api key|has no API key for|CREDENTIAL_MISSING/i },
       { key: 'cause.forbidden', re: /(?<![0-9])403(?![0-9])|Forbidden|OWNER_REQUIRED|权限被拒/i },
       { key: 'cause.payload', re: /(?<![0-9])413(?![0-9])|Payload Too Large|request entity too large/i },
       { key: 'cause.gateway', re: /(?<![0-9])50[234](?![0-9])|Bad Gateway|Service Unavailable|Gateway Timeout/i },
@@ -1322,6 +1438,8 @@ window.__ModuleLoader__.load({
       { key: 'cause.inuse', re: /already in use by another|已有另一个|已被占用|being used by another process|另一个程序正在使用/i },
       { key: 'cause.busy', re: /os error 32(?![0-9])|EBUSY/i },
       { key: 'cause.pipe', re: /named pipe|命名管道|EPERM.*pipe|pipe.*EPERM/i },
+      { key: 'cause.pathguard', re: /must stay inside the workspace|path must stay inside/i },
+      { key: 'cause.approvaloff', re: /approval prompts are disabled|auto-denied this action/i },
       { key: 'cause.sandbox', re: /sandbox: file access denied|sandbox denied|sandbox: denied|sandbox blocked/i },
       { key: 'cause.denied', re: /os error 5(?![0-9])|EACCES|EPERM|PermissionError|Permission denied|拒绝访问|Access is denied/i },
       { key: 'cause.command', re: /command not found|不是内部或外部命令|Executable not found/i },
@@ -1371,6 +1489,12 @@ window.__ModuleLoader__.load({
      */
     const NEXT_ACTIONS = {
   'cause.toolname': 'next.toolname',
+  'cause.unknownTool': 'next.unknownTool',
+  'cause.askcancelled': 'next.askcancelled',
+  'cause.stale': 'next.stale',
+  'cause.modeReplace': 'next.modeReplace',
+  'cause.pathguard': 'next.pathguard',
+  'cause.approvaloff': 'next.approvaloff',
   'cause.safetynet': 'next.safetynet',
   'cause.notread': 'next.notread',
   'cause.invalidargs': 'next.invalidargs',
@@ -1425,7 +1549,122 @@ window.__ModuleLoader__.load({
   'cause.abort': 'next.abort',
 };
 
-function stripHintNoise(text) {
+/* --- repair commands (start) --- */
+
+    /**
+     * The causes whose fix is a terminal command and not a reasoning step. The
+     * card lists these under the advice, ready to copy: fixing a stuck port or a
+     * missing module costs no model turn, so it should not need one.
+     *
+     * A cause whose repair needs judgement (a bad argument, a wrong anchor, an
+     * unclear 4xx) stays out of this table — it belongs to the repair prompt,
+     * where the agent can look at the real error first. The same holds for
+     * anything that would touch files outside the workspace.
+     *
+     * {placeholders} are filled from the failure itself; one that cannot be read
+     * stays visible in upper case, because silently substituting a guessed path
+     * would send the reader to the wrong file.
+     */
+    const FIX_COMMANDS = {
+      'cause.port': [
+        'Get-NetTCPConnection -LocalPort {port} -ErrorAction SilentlyContinue | Select-Object -First 5 LocalAddress,OwningProcess',
+      ],
+      'cause.enoent': [
+        "Test-Path -LiteralPath '{path}'",
+        "Get-ChildItem -LiteralPath '{dir}' -Force | Select-Object -First 20 Name,Length",
+      ],
+      'cause.notdir': ["Get-Item -LiteralPath '{path}' | Select-Object FullName,PSIsContainer"],
+      'cause.module': ['python -m pip install {module}'],
+      'cause.command': ["Get-Command '{command}' -ErrorAction SilentlyContinue | Select-Object Name,Source", 'where.exe {command}'],
+      'cause.nospace': [
+        "Get-PSDrive -PSProvider FileSystem | Select-Object Name,@{n='FreeGB';e={[math]::Round($_.Free/1GB,1)}}",
+      ],
+      'cause.nogit': [
+        'git rev-parse --show-toplevel',
+        'Get-ChildItem -Force -Directory | Select-Object -First 20 Name',
+      ],
+      'cause.eresolve': ['pnpm install --no-strict-peer-dependencies'],
+      'cause.npm': ['pnpm install'],
+      'cause.encoding': ["Get-Content -LiteralPath '{path}' -Encoding UTF8 -TotalCount 5"],
+      'cause.dns': ['Resolve-DnsName {host}'],
+      'cause.refused': ['Test-NetConnection -ComputerName {host} -Port {port} -InformationLevel Quiet'],
+      'cause.tls': ["curl.exe -vI '{url}' 2>&1 | Select-String -Pattern 'SSL|certificate|expire'"],
+      'cause.webnet': ["curl.exe -sI --max-time 10 '{url}'"],
+    };
+
+    function firstMatch(text, re) {
+      if (typeof text !== 'string' || text === '') return '';
+      const match = re.exec(text);
+      return match === null ? '' : String(match[1] === undefined ? match[0] : match[1]).trim();
+    }
+
+    /**
+     * The values a repair command needs, read from the failure itself. The call
+     * arguments are the best source for a path — that is the exact string the
+     * call was made with — and the raw body is the fallback for everything else.
+     */
+    function repairValues(record, raw) {
+      const argPath =
+        typeof record.path === 'string' && record.path !== ''
+          ? record.path
+          : typeof record.args === 'string'
+            ? firstMatch(record.args, /"(?:path|file_path|filePath|file)"\s*:\s*"([^"]+)"/)
+            : '';
+      const path =
+        argPath !== ''
+          ? argPath
+          : firstMatch(raw, /([A-Za-z]:\\[^\s"'`<>|*?]+)/) || firstMatch(raw, /(?:^|[\s'"])(\/[^\s'"]+)/);
+      const dir =
+        path === ''
+          ? ''
+          : path.replace(/[\\/][^\\/]*$/, '') || path;
+      const url = firstMatch(raw, /(https?:\/\/[^\s'"`)\]<>]+)/);
+      const hostFromUrl = firstMatch(url, /^https?:\/\/([^\/:?#]+)/);
+      const host =
+        hostFromUrl !== ''
+          ? hostFromUrl
+          : firstMatch(raw, /(?:getaddrinfo|resolve host|hostname|Name or service not known)[^\n]*?([a-z0-9][a-z0-9.-]*\.[a-z]{2,})/i);
+      const port =
+        firstMatch(raw, /:(\d{2,5})(?![\d])/) ||
+        firstMatch(raw, /\bport\s+(\d{2,5})(?![\d])/i);
+      const moduleName =
+        firstMatch(raw, /No module named '?([\w.]+)'?/) ||
+        firstMatch(raw, /(?:Cannot find module|ERR_MODULE_NOT_FOUND)[^\n'"]*['"]([^'"]+)['"]/);
+      const command =
+        firstMatch(raw, /([\w.-]+)[^\n]{0,40}(?:is not recognized as|不是内部或外部命令)/i) ||
+        firstMatch(raw, /(?:command not found|找不到)[:\s]*([\w.-]+)/i);
+      return { path, dir, url, host, port, module: moduleName, command };
+    }
+
+    /**
+     * The command lines for one card, or an empty list. A line whose value could
+     * not be read from the failure is not shown at all: a half-filled command such
+     * as Stop-Process -Id <PID> reads as an instruction and fails when run, which
+     * is worse than offering no shortcut. Cards with such a cause keep the repair
+     * prompt only.
+     */
+    function repairCommands(record, causeKey) {
+      const templates = causeKey !== null ? FIX_COMMANDS[causeKey] : undefined;
+      if (templates === undefined) return [];
+      const raw = [record.detail, record.message, record.code, record.raw, record.args]
+        .filter((part) => typeof part === 'string' && part !== '')
+        .join('\n');
+      const values = repairValues(record, raw);
+      let complete = true;
+      const lines = templates.map((line) =>
+        line.replace(/\{(\w+)\}/g, (whole, name) => {
+          const value = values[name];
+          if (typeof value === 'string' && value !== '') return value;
+          complete = false;
+          return '';
+        }),
+      );
+      return complete ? lines : [];
+    }
+
+    /* --- repair commands (end) --- */
+
+    function stripHintNoise(text) {
       if (typeof text !== 'string' || text === '') return '';
       return text
         .replace(/\[[^\]]*escalation available[^\]]*\]/gi, ' ')
@@ -1561,6 +1800,37 @@ function stripHintNoise(text) {
         };
       }
       return undefined;
+    }
+
+    /**
+     * The repair handshake: after a "Fix it now" run, the agent appends a marker
+     * line naming the seq it fixed. Reading it back is what closes the loop — the
+     * card is ticked off without the user clicking anything, and a fix that was
+     * never verified never emits the line, so nothing is marked by accident.
+     */
+    const FIXED_MARKER = /ERROR-MONITOR-FIXED\s+seq=(\d+)/g;
+
+    /** The seqs the agent reported as verified-fixed in its own messages. */
+    function fixedSeqsIn(entries) {
+      const seqs = new Set();
+      if (!Array.isArray(entries)) return seqs;
+      for (const entry of entries) {
+        const event = durableEvent(entry);
+        if (event === undefined || event.type !== 'assistant/message') continue;
+        const data = isRecord(event.data) ? event.data : {};
+        const message = isRecord(data.message) ? data.message : undefined;
+        const content = message !== undefined && Array.isArray(message.content) ? message.content : [];
+        let text = '';
+        for (const part of content) {
+          if (isRecord(part) && part.type === 'text' && typeof part.text === 'string') text += part.text + '\n';
+        }
+        if (text === '') continue;
+        for (const match of text.matchAll(FIXED_MARKER)) {
+          const seq = Number(match[1]);
+          if (Number.isFinite(seq)) seqs.add(seq);
+        }
+      }
+      return seqs;
     }
 
     /**
@@ -1936,18 +2206,25 @@ function stripHintNoise(text) {
 .emx-next { font-size: 12px; line-height: 18px; color: var(--dsw-alias-label-primary); padding-left: 8px; border-left: 2px solid var(--dsw-alias-state-success-primary); }
 .emx-badgeFatal { border-color: var(--dsw-alias-state-error-primary); color: var(--dsw-alias-state-error-primary); font-weight: 600; }
 .emx-badgeRecover { color: var(--dsw-alias-label-tertiary); }
+.emx-badgeNote { color: var(--dsw-alias-label-secondary); border-style: dashed; }
+.emx-noteFold { margin-top: 4px; padding-top: 8px; border-top: 1px dashed var(--dsw-alias-border-l2); display: flex; flex-direction: column; gap: 6px; }
+.emx-noteToggle { align-self: flex-start; background: none; border: none; padding: 0; color: var(--dsw-alias-label-tertiary); font-size: 12px; cursor: pointer; }
+.emx-noteToggle:hover { color: var(--dsw-alias-label-primary); }
+.emx-noteHint { font-size: 12px; color: var(--dsw-alias-label-tertiary); }
+.emx-noteList { display: flex; flex-direction: column; gap: 8px; }
 .emx-args { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 12px; line-height: 18px; color: var(--dsw-alias-label-secondary); white-space: pre-wrap; word-break: break-word; padding: 0 8px; max-height: 76px; overflow: auto; }
 .emx-scale { color: var(--dsw-alias-label-tertiary); font-size: 12px; }
 .emx-rawToggle { align-self: flex-start; background: none; border: none; padding: 0; color: var(--dsw-alias-label-secondary); font-size: 12px; cursor: pointer; }
 .emx-rawToggle:hover { color: var(--dsw-alias-label-primary); }
 .emx-raw { margin: 0; font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 11px; line-height: 16px; white-space: pre-wrap; word-break: break-word; max-height: 220px; overflow: auto; color: var(--dsw-alias-label-secondary); }
 .emx-actions { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.emx-more { flex-basis: 100%; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; padding-top: 4px; }
+.emx-btnMoreOpen { color: var(--dsw-alias-label-primary); }
 .emx-btn { font: inherit; font-size: 12px; line-height: 18px; padding: 3px 10px; border-radius: var(--dsw-radius-md); border: 1px solid var(--dsw-alias-border-l2); background: transparent; color: var(--dsw-alias-label-secondary); cursor: pointer; }
 .emx-btn:hover { background: var(--dsw-alias-interactive-bg-hover); color: var(--dsw-alias-label-primary); }
 .emx-btn:disabled { opacity: 0.55; cursor: default; }
 .emx-btnQuiet { border-color: transparent; color: var(--dsw-alias-label-tertiary); }
 .emx-btnQuiet:hover { border-color: var(--dsw-alias-border-l2); }
-.emx-btnEnd { margin-left: auto; }
 .emx-state { color: var(--dsw-alias-label-tertiary); font-size: 12px; }
 .emx-stateError { color: var(--dsw-alias-state-error-primary); }
 .emx-empty { padding: 20px 14px; color: var(--dsw-alias-label-tertiary); display: flex; flex-direction: column; gap: 6px; }
@@ -1955,6 +2232,13 @@ function stripHintNoise(text) {
 .emx-foot { padding: 0 14px 10px; color: var(--dsw-alias-label-caption); font-size: 11px; flex: none; }
 .emx-loadOlder { display: flex; align-items: center; gap: 8px; padding: 0 14px 10px; flex: none; }
 .emx-rowAlert { display: inline-flex; align-items: center; justify-content: center; width: 16px; height: 16px; color: var(--dsw-alias-state-error-primary); }
+.emx-btnFix { border-color: var(--dsw-alias-state-success-primary); color: var(--dsw-alias-state-success-primary); }
+.emx-btnFix:hover { background: var(--dsw-alias-interactive-bg-hover); color: var(--dsw-alias-state-success-primary); border-color: var(--dsw-alias-state-success-primary); }
+.emx-fix { display: flex; flex-direction: column; gap: 4px; padding: 6px 8px; border: 1px solid var(--dsw-alias-border-l2); border-radius: var(--dsw-radius-md); background: var(--dsw-alias-bg-l2); }
+.emx-fixHead { display: flex; align-items: center; gap: 8px; font-size: 12px; line-height: 18px; }
+.emx-fixLabel { font-weight: 600; color: var(--dsw-alias-label-primary); }
+.emx-fixHint { color: var(--dsw-alias-label-tertiary); font-size: 11px; }
+.emx-fixCode { margin: 0; font-size: 11.5px; line-height: 17px; white-space: pre-wrap; word-break: break-all; color: var(--dsw-alias-label-primary); font-family: ui-monospace, SFMono-Regular, Consolas, 'Courier New', monospace; }
 `;
 
     function StyleTag() {
@@ -1978,7 +2262,7 @@ function stripHintNoise(text) {
       const slots = ctx.slots;
 
       function ErrorItem(props) {
-        const { record, t, isNew, session, onHandled, sessionId, resolved, onResolve, onUnresolve } = props;
+        const { record, t, isNew, session, onHandled, sessionId, resolved, onResolve, onUnresolve, note, moreOpen, onToggleMore } = props;
         const sessionRef =
           typeof record.childId === 'string' && record.childId !== ''
             ? record.childId
@@ -1990,6 +2274,7 @@ function stripHintNoise(text) {
         const [open, setOpen] = useState(false);
         const [copyState, setCopyState] = useState('');
         const [sendState, setSendState] = useState('');
+        const [fixCopyState, setFixCopyState] = useState('');
         const timer = useRef(null);
 
         useEffect(
@@ -2034,6 +2319,9 @@ function stripHintNoise(text) {
         // Attribution reads the whole raw payload, not just the visible summary.
         const causeKey = useMemo(() => ownedCause(record), [record]);
         const causeText = causeKey === null ? '' : t(causeKey);
+        // A cause whose fix is a terminal command carries those lines here, so
+        // the step can be repaired without spending a model turn.
+        const fixCommands = useMemo(() => repairCommands(record, causeKey), [record, causeKey]);
 
         // A turn error kills the turn; everything else leaves the session usable.
         const isFatal = record.source === 'turn';
@@ -2139,6 +2427,31 @@ function stripHintNoise(text) {
           () => sendPrompt('send.retry', {}),
           [sendPrompt],
         );
+        // The repair prompt asks for the fix, not another diagnosis: same scene,
+        // the advice, the commands when there are any, and an explicit order
+        // (read the raw event, act, verify by rerunning this call).
+        const onFix = useCallback(
+          () =>
+            sendPrompt('send.fix', {
+              next: nextText,
+              fixes: fixCommands.length === 0 ? t('send.fixNone') : fixCommands.join('\n'),
+            }),
+          [sendPrompt, nextText, fixCommands, t],
+        );
+        const onCopyFix = useCallback(async () => {
+          try {
+            if (navigator.clipboard !== undefined && typeof navigator.clipboard.writeText === 'function') {
+              await navigator.clipboard.writeText(fixCommands.join('\n'));
+            } else {
+              throw new Error('clipboard unavailable');
+            }
+            setFixCopyState(t('item.fixCopied'));
+          } catch {
+            setFixCopyState(t('item.fixCopyFailed'));
+          }
+          if (timer.current !== null) window.clearTimeout(timer.current);
+          timer.current = window.setTimeout(() => setFixCopyState(''), 2200);
+        }, [fixCommands, t]);
         // The mark hangs off the group key, so every repeat of this cause follows.
         const onToggleResolved = useCallback(() => {
           const key = groupKey(record);
@@ -2164,16 +2477,16 @@ function stripHintNoise(text) {
           h(
             'div',
             { className: 'emx-row' },
-            h('span', { className: 'emx-badge emx-badgeError' }, label),
+            h('span', { className: 'emx-badge' + (note ? ' emx-badgeNote' : ' emx-badgeError') }, note ? t('item.noteBadge') : label),
             record.childId !== undefined && record.childId !== ''
               ? h('span', { className: 'emx-badge' }, t('item.fromChild', { id: String(record.childId).slice(0, 8) }))
               : null,
-            resolved ? h('span', { className: 'emx-badge emx-badgeResolved' }, t('item.resolved')) : null,
-            h(
-              'span',
-              { className: isFatal ? 'emx-badge emx-badgeFatal' : 'emx-badge emx-badgeRecover' },
-              isFatal ? t('item.fatal') : t('item.recover'),
-            ),
+            resolved ? h('span', { className: 'emx-badge emx-badgeResolved', title: t('item.resolvedHint') }, t('item.resolved')) : null,
+            isFatal
+              ? h('span', { className: 'emx-badge emx-badgeFatal' }, t('item.fatal'))
+              : note
+                ? null
+                : h('span', { className: 'emx-badge emx-badgeRecover' }, t('item.recover')),
             repeats ? h('span', { className: 'emx-badge emx-badgeCount' }, '×' + String(record.count)) : null,
             loop ? h('span', { className: 'emx-badge emx-badgeLoop' }, t('item.loopBadge', { n: String(record.count) })) : null,
             record.tool === null ? null : h('span', { className: 'emx-badge' }, record.tool),
@@ -2197,6 +2510,25 @@ function stripHintNoise(text) {
             ? null
             : h('div', { className: 'emx-cause' }, t('item.cause', { cause: causeText })),
           h('div', { className: 'emx-next' }, t('item.next', { next: nextText })),
+          fixCommands.length === 0 || note
+            ? null
+            : h(
+                'div',
+                { className: 'emx-fix' },
+                h(
+                  'div',
+                  { className: 'emx-fixHead' },
+                  h('span', { className: 'emx-fixLabel' }, t('item.fixCmd')),
+                  h('span', { className: 'emx-fixHint' }, t('item.fixCmdHint')),
+                  h('span', { className: 'emx-metaSpacer' }),
+                  h(
+                    'button',
+                    { type: 'button', className: 'emx-btn emx-btnQuiet', onClick: onCopyFix },
+                    fixCopyState === '' ? t('item.fixCopy') : fixCopyState,
+                  ),
+                ),
+                h('pre', { className: 'emx-fixCode' }, fixCommands.join('\n')),
+              ),
           argsText === '' ? null : h('div', { className: 'emx-args' }, argsText),
           scaleText === '' ? null : h('div', { className: 'emx-scale' }, scaleText),
           h(
@@ -2209,44 +2541,80 @@ function stripHintNoise(text) {
             },
             open ? t('item.collapse') : t('item.expand'),
           ),
-          open
-            ? h(
+          !open
+            ? null
+            : h(
                 'div',
                 null,
                 h('div', { className: 'emx-meta' }, t('item.raw')),
                 h('pre', { className: 'emx-raw' }, record.raw),
-              )
-            : null,
+              ),
           h(
             'div',
             { className: 'emx-actions' },
-            h('button', { type: 'button', className: 'emx-btn', onClick: onCopy }, copyState === '' ? t('item.copy') : copyState),
-            h(
-              'button',
-              { type: 'button', className: 'emx-btn', onClick: onSend, disabled: session === undefined || sendState === 'sending' },
-              t('item.send'),
-            ),
             h(
               'button',
               {
                 type: 'button',
-                className: 'emx-btn',
-                onClick: onRetry,
+                className: 'emx-btn emx-btnFix',
+                onClick: onFix,
                 disabled: session === undefined || sendState === 'sending',
-                title: t('item.retry'),
+                title: t('item.fixHint'),
               },
-              t('item.retry'),
+              t('item.fix'),
             ),
+            h('button', { type: 'button', className: 'emx-btn', onClick: onCopy }, copyState === '' ? t('item.copy') : copyState),
             h(
               'button',
               { type: 'button', className: 'emx-btn emx-btnQuiet', onClick: onToggleResolved },
               resolved ? t('item.unresolve') : t('item.resolve'),
             ),
+            // The three quieter actions live behind one toggle: at most one of
+            // them is the right move, and putting them side by side with 直接修复
+            // only made the reader pick wrong.
             h(
               'button',
-              { type: 'button', className: 'emx-btn emx-btnQuiet emx-btnEnd', onClick: onSendFull, disabled: session === undefined || sendState === 'sending' },
-              t('item.sendFull'),
+              {
+                type: 'button',
+                className: 'emx-btn emx-btnQuiet' + (moreOpen ? ' emx-btnMoreOpen' : ''),
+                onClick: onToggleMore,
+                'aria-expanded': moreOpen,
+                title: t('item.moreHint'),
+              },
+              (moreOpen ? '▾ ' : '▸ ') + t('item.more'),
             ),
+            moreOpen
+              ? h(
+                  'div',
+                  { className: 'emx-more' },
+                  h(
+                    'button',
+                    { type: 'button', className: 'emx-btn emx-btnQuiet', onClick: onSend, disabled: session === undefined || sendState === 'sending' },
+                    t('item.send'),
+                  ),
+                  h(
+                    'button',
+                    {
+                      type: 'button',
+                      className: 'emx-btn emx-btnQuiet',
+                      onClick: onRetry,
+                      disabled: session === undefined || sendState === 'sending',
+                      title: t('item.retry'),
+                    },
+                    t('item.retry'),
+                  ),
+                  h(
+                    'button',
+                    {
+                      type: 'button',
+                      className: 'emx-btn emx-btnQuiet',
+                      onClick: onSendFull,
+                      disabled: session === undefined || sendState === 'sending',
+                    },
+                    t('item.sendFull'),
+                  ),
+                )
+              : null,
             statusText === ''
               ? null
               : h('span', { className: 'emx-state' + (sendState === 'failed' ? ' emx-stateError' : '') }, statusText),
@@ -2256,7 +2624,7 @@ function stripHintNoise(text) {
 
       function DocsBody(props) {
         const t = props.t;
-        const cardKeys = ['copy', 'send', 'retry', 'resolve', 'full'];
+        const cardKeys = ['note', 'fix', 'copy', 'resolve', 'more', 'fixcmd'];
         const barKeys = ['report', 'search', 'source', 'unresolved', 'unread', 'markAll', 'loadOlder'];
         const row = (section, key) =>
           h(
@@ -2288,9 +2656,8 @@ function stripHintNoise(text) {
             : undefined;
 
         const sessionId = given;
-        const { session, records, childRecords, topSeq, seen, unread, markRead, markReadThrough, hasMore, loadingOlder, loadOlder } =
+        const { session, records, childRecords, fixedSeqs, topSeq, seen, unread, markRead, markReadThrough, hasMore, loadingOlder, loadOlder } =
           useErrorFeed(ctx, sessionId, { baseline: true });
-        const newCount = unread;
         const grouped = useMemo(() => groupRecords(sortRecords(records.concat(childRecords))), [records, childRecords]);
         const totalCount = records.length + childRecords.length;
         const [sourceFilter, setSourceFilter] = useState('all');
@@ -2327,6 +2694,28 @@ function stripHintNoise(text) {
           [sessionId, markReadThrough],
         );
         const onUnresolve = useCallback((key) => unmarkResolved(sessionId, key), [sessionId]);
+        // Closing the loop: the agent appends `ERROR-MONITOR-FIXED seq=N` only
+        // after the same call was rerun and verified, so a group containing that
+        // seq can be ticked off here instead of waiting for a click. A mark the
+        // user already made is left alone — their state wins.
+        useEffect(() => {
+          if (fixedSeqs === undefined || fixedSeqs.size === 0) return;
+          const ledger = readAutoFix(sessionId);
+          let changed = false;
+          for (const group of records.concat(childRecords)) {
+            const seqs = Array.isArray(group.seqs) && group.seqs.length > 0 ? group.seqs : [group.seq];
+            const key = groupKey(group);
+            const applied = Array.isArray(ledger[key]) ? ledger[key] : [];
+            const fresh = seqs
+              .map(Number)
+              .filter((seq) => Number.isFinite(seq) && fixedSeqs.has(seq) && applied.indexOf(seq) === -1);
+            if (fresh.length === 0) continue;
+            if (resolvedMap[key] === undefined) markResolved(sessionId, key, Date.now());
+            ledger[key] = applied.concat(fresh);
+            changed = true;
+          }
+          if (changed) writeAutoFix(sessionId, ledger);
+        }, [fixedSeqs, records, childRecords, resolvedMap, sessionId]);
         // Space-separated keywords AND together, so "edit sandbox" requires both
         // to hit — a keyword may land on a different field than another.
         const needles = needle === '' ? [] : needle.split(/\s+/);
@@ -2352,6 +2741,27 @@ function stripHintNoise(text) {
             }),
           [grouped, sourceFilter, unreadOnly, seen, needles, hideResolved, resolvedMap],
         );
+        // A failure the agent recovered from on its own is history, not a task:
+        // it lives in a fold at the bottom of the list and never raises the banner.
+        // Only a killed turn or a proven loop is allowed to ask for attention.
+        const [notesOpen, setNotesOpen] = useState(false);
+        // One shared switch: while triaging a burst, opening 更多 on one card opens
+        // it on every card, instead of a re-click per card.
+        const [moreOpen, setMoreOpen] = useState(false);
+        const toggleMore = useCallback(() => setMoreOpen((value) => !value), []);
+        const isNoteGroup = useCallback(
+          (group) => group.source !== 'turn' && group.count < LOOP_MIN_COUNT && resolvedMap[groupKey(group)] === undefined,
+          [resolvedMap],
+        );
+        const noteGroups = useMemo(() => visible.filter(isNoteGroup), [visible, isNoteGroup]);
+        const mainGroups = useMemo(() => visible.filter((group) => !isNoteGroup(group)), [visible, isNoteGroup]);
+        // Counting records rather than groups: "3 new" reads as three failures,
+        // which is what the banner promises.
+        const attentionNew = useMemo(
+          () =>
+            seen === null ? 0 : mainGroups.reduce((sum, group) => (watermarkOf(group) > seen ? sum + group.count : sum), 0),
+          [mainGroups, seen],
+        );
         const onCopyReport = useCallback(async () => {
           const parts = [];
           parts.push('# ' + t('report.title'));
@@ -2362,11 +2772,11 @@ function stripHintNoise(text) {
           parts.push(
             '- ' +
               t('report.count', {
-                groups: visible.length,
-                records: visible.reduce((sum, group) => sum + group.count, 0),
+                groups: mainGroups.length,
+                records: mainGroups.reduce((sum, group) => sum + group.count, 0),
               }),
           );
-          visible.forEach((group, index) => {
+          mainGroups.forEach((group, index) => {
             const repeats = group.count > 1;
             const heading =
               String(index + 1) +
@@ -2413,7 +2823,7 @@ function stripHintNoise(text) {
           }
           if (reportTimer.current !== null) window.clearTimeout(reportTimer.current);
           reportTimer.current = window.setTimeout(() => setReportState(''), 2200);
-        }, [visible, t, resolvedMap]);
+        }, [mainGroups, t, resolvedMap]);
 
         if (session === undefined) {
           return h(
@@ -2446,7 +2856,7 @@ function stripHintNoise(text) {
                 type: 'button',
                 className: 'emx-btn emx-btnQuiet',
                 onClick: onCopyReport,
-                disabled: visible.length === 0,
+                disabled: mainGroups.length === 0,
               },
               reportState === '' ? t('report.copy') : reportState,
             ),
@@ -2529,12 +2939,12 @@ function stripHintNoise(text) {
             ),
           ),
           h('div', { className: 'emx-searchTip' }, t('filter.searchHint')),
-          newCount > 0
+          attentionNew > 0
             ? h(
                 'div',
                 { className: 'emx-banner', role: 'status' },
                 h('span', { className: 'emx-dot', 'aria-hidden': true }),
-                h('span', { className: 'emx-bannerText' }, t('banner.new', { n: String(newCount) })),
+                h('span', { className: 'emx-bannerText' }, t('banner.new', { n: String(attentionNew) })),
                 h('button', { type: 'button', className: 'emx-btn', onClick: markRead }, t('banner.markRead')),
               )
             : null,
@@ -2562,13 +2972,15 @@ function stripHintNoise(text) {
               : h(
                   'div',
                   { className: 'emx-list' },
-                  visible.slice(0, renderLimit).map((record) =>
+                  mainGroups.slice(0, renderLimit).map((record) =>
                     h(ErrorItem, {
                       key: record.id,
                       record,
                       t,
                       session,
                       sessionId,
+                      moreOpen,
+                      onToggleMore: toggleMore,
                       isNew: seen !== null && watermarkOf(record) > seen,
                       onHandled: record.fromChild ? undefined : markReadThrough,
                       resolved: resolvedMap[groupKey(record)] !== undefined,
@@ -2576,7 +2988,7 @@ function stripHintNoise(text) {
                       onUnresolve,
                     }),
                   ),
-                  visible.length > renderLimit
+                  mainGroups.length > renderLimit
                     ? h(
                         'button',
                         {
@@ -2584,9 +2996,53 @@ function stripHintNoise(text) {
                           className: 'emx-btn emx-btnQuiet',
                           onClick: () => setRenderLimit((value) => value + 50),
                         },
-                        t('panel.showMore', { n: String(visible.length - renderLimit) }),
+                        t('panel.showMore', { n: String(mainGroups.length - renderLimit) }),
                       )
                     : null,
+                  // Everything below is what the agent already tried again on its
+                  // own: collapsed to one line, so the list only shows what stopped.
+                  noteGroups.length === 0
+                    ? null
+                    : h(
+                        'div',
+                        { className: 'emx-noteFold' },
+                        h(
+                          'button',
+                          {
+                            type: 'button',
+                            className: 'emx-noteToggle',
+                            onClick: () => setNotesOpen((value) => !value),
+                            'aria-expanded': notesOpen,
+                          },
+                          (notesOpen ? '▾ ' : '▸ ') + t('panel.notes', { n: String(noteGroups.length) }),
+                        ),
+                        h('span', { className: 'emx-noteHint' }, t('panel.notesHint')),
+                        notesOpen
+                          ? h(
+                              'div',
+                              { className: 'emx-noteList' },
+                              noteGroups.slice(0, renderLimit).map((record) =>
+                                h(ErrorItem, {
+                                  key: 'note-' + record.id,
+                                  record,
+                                  t,
+                                  session,
+                                  sessionId,
+                                  note: true,
+                                  moreOpen,
+                                  onToggleMore: toggleMore,
+                                  // The fold is already a quiet zone: no red highlight for a
+                                  // failure the agent normally recovers from on its own.
+                                  isNew: false,
+                                  onHandled: record.fromChild ? undefined : markReadThrough,
+                                  resolved: resolvedMap[groupKey(record)] !== undefined,
+                                  onResolve,
+                                  onUnresolve,
+                                }),
+                              ),
+                            )
+                          : null,
+                      ),
                 ),
           h('div', { className: 'emx-foot' }, t('panel.windowNote')),
         );
