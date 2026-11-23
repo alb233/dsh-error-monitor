@@ -18,7 +18,9 @@ if (start === -1 || end === -1 || end < start) {
   process.exit(1);
 }
 const body = src.slice(start + OPEN.length, end);
-const { repairCommands, FIX_COMMANDS } = new Function(body + '\nreturn { repairCommands, FIX_COMMANDS };')();
+const { repairCommands, FIX_COMMANDS, FIX_COMMANDS_POSIX } = new Function(
+  body + '\nreturn { repairCommands, FIX_COMMANDS, FIX_COMMANDS_POSIX };',
+)();
 
 const cases = [
   [
@@ -59,6 +61,27 @@ const cases = [
     (out) => out.length === 2 && !out.join(' ').includes('git init'),
   ],
   ['placeholdless template still shows', { path: '', raw: 'ENOSPC: no space left' }, 'cause.nospace', (out) => out.length === 1],
+  [
+    'a unix path switches to the POSIX table',
+    { path: '/srv/app/data.db', raw: "ENOENT: no such file or directory, open '/srv/app/data.db'" },
+    'cause.enoent',
+    (out) =>
+      out.length === 1 &&
+      out[0].startsWith("test -e '/srv/app/data.db'") &&
+      out[0].includes("ls -la '/srv/app'"),
+  ],
+  [
+    'a unix port failure uses ss/lsof',
+    { path: '/srv/app', raw: 'Error: listen EADDRINUSE: address already in use :::3000' },
+    'cause.port',
+    (out) => out.length === 1 && out[0].includes('ss -ltnp') && out[0].includes('3000'),
+  ],
+  [
+    'windows text keeps the PowerShell table',
+    { path: '', raw: 'listen EADDRINUSE :::3000 (pwsh)' },
+    'cause.port',
+    (out) => out.length === 1 && out[0].includes('Get-NetTCPConnection'),
+  ],
 ];
 
 let failed = 0;
@@ -75,6 +98,16 @@ for (const key of Object.keys(FIX_COMMANDS)) {
     failed += 1;
     console.log('FAIL  table key not a cause: ' + key);
   }
+}
+
+// Both tables must cover the same causes, or a mac user silently loses a repair.
+const psKeys = Object.keys(FIX_COMMANDS).sort().join('|');
+const posixKeys = Object.keys(FIX_COMMANDS_POSIX).sort().join('|');
+if (psKeys !== posixKeys) {
+  failed += 1;
+  console.log('FAIL  POSIX table keys differ: ' + posixKeys);
+} else {
+  console.log('PASS  both tables cover the same causes');
 }
 console.log(failed === 0 ? '\nall cases pass' : '\n' + failed + ' failed');
 process.exit(failed === 0 ? 0 : 1);

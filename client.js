@@ -9,6 +9,7 @@ window.__ModuleLoader__.load({
     /** View cell id and the key its body registers under. */
     const TAB_TYPE_ID = PACKAGE;
     const SEEN_PREFIX = PACKAGE + '.seen.';
+const SEEN_CHILD_PREFIX = PACKAGE + '.seenChild.';
     const RESOLVED_PREFIX = PACKAGE + '.resolved.';
 // Ledger of verified-fix markers already applied, so un-marking a card sticks.
 const AUTO_PREFIX = PACKAGE + '.autofix.';
@@ -34,7 +35,11 @@ const AUTO_PREFIX = PACKAGE + '.autofix.';
         'panel.showMore': 'Show {n} earlier entries',
   'panel.notes': '{n} retried by the agent itself',
   'panel.notesHint': 'The agent usually retries these on its own, so usually nothing to do; open to read the raw errors.',
+  'panel.childOverflow': '{n} more subagent sessions exist but are not read (cap {max}).',
+  'item.thrashHint': 'The same tool has failed for the same reason {n} times with different arguments — it looks stuck in place. Diagnose first, then change the approach instead of retrying.',
+  'item.childHint': 'Its own errors are folded below ({n}).',
         'banner.new': '{n} new since you last looked',
+        'banner.autoResolved': '{n} card(s) ticked off from the agent\u2019s verified-fix report',
         'banner.markRead': 'Mark as read',
         'banner.latest': 'Latest error',
         'filter.all': 'All',
@@ -142,7 +147,7 @@ const AUTO_PREFIX = PACKAGE + '.autofix.';
         'next.missing': 'Confirm the URL or resource actually exists',
         'next.traceback': 'Read the last line of the traceback — the exception type and message there are the root cause',
         'next.abort': 'Find what cancelled the request, then start it again',
-        'next.default': 'Send this back to the conversation so the model reads the original event, instead of guessing at the arguments',
+        'next.default': 'Use More → Diagnose only so the model reads the original event, instead of guessing at the arguments',
         'next.loop': 'Stop resending this call — {next}',
         'next.toolname':
           'Do not send it again: this provider cannot produce a usable tool call here — switch model or route for this session',
@@ -249,19 +254,25 @@ const AUTO_PREFIX = PACKAGE + '.autofix.';
         'item.more': 'More',
         'item.moreHint': 'Less-used actions',
         'item.sending': 'Sending…',
-        'item.sent': 'Sent to chat',
+        'item.sent': 'Sent to the model',
         'item.sendFailed': 'Send failed',
         'item.expand': 'Show raw error',
         'item.collapse': 'Hide raw error',
         'send.prompt':
-          'I hit an error in this session. Please analyse the cause and propose a fix.\n\nSource: {source}\nTurn: {turn}\nTime: {time}\nCode: {code}\nLikely cause: {cause}\nSummary: {summary}\nArguments: {args}\nSession id: {sessionId}\nSession event seq: {seq}\n\nThe summary above is trimmed. Read the original event before diagnosing: call session_event_read with seq={seq} (add session_id={sessionId}; if that id is rejected, call it with seq={seq} only to read the current session). Then work from the real error text instead of the digest.',
+          'I hit an error in this session. Please analyse the cause and propose a fix.\n\nSource: {source}\nTurn: {turn}\nTime: {time}\nCode: {code}\nLikely cause: {cause}\nSummary: {summary}\nArguments: {args}\nSession id: {sessionId}{childNote}\nSession event seq: {seq}\n\nThe summary above is trimmed. Read the original event before diagnosing: call session_event_read with seq={seq} (add session_id={sessionId}; if that id is rejected, call it with seq={seq} only to read the current session). Then work from the real error text instead of the digest.',
         'send.promptFull':
-          'I hit an error in this session. Please analyse the cause and propose a fix.\n\nSource: {source}\nTurn: {turn}\nTime: {time}\nCode: {code}\nLikely cause: {cause}\nArguments: {args}\nSession id: {sessionId}\nSession event seq: {seq}\nRaw error:\n```\n{raw}\n```\n\nIf the raw text above is still cut off, read the original event with session_event_read(seq={seq}) (add session_id={sessionId} if needed) before concluding.',
+          'I hit an error in this session. Please analyse the cause and propose a fix.\n\nSource: {source}\nTurn: {turn}\nTime: {time}\nCode: {code}\nLikely cause: {cause}\nArguments: {args}\nSession id: {sessionId}{childNote}\nSession event seq: {seq}\nRaw error:\n```\n{raw}\n```\n\nIf the raw text above is still cut off, read the original event with session_event_read(seq={seq}) (add session_id={sessionId} if needed) before concluding.',
         'send.retry':
-          'Please re-run exactly this step of the session and report the result.\n\nSource: {source}\nTurn: {turn}\nTool: {tool}\nArguments: {args}\nCode: {code}\nLikely cause: {cause}\nError: {summary}\nSession id: {sessionId}\nSession event seq: {seq}\n\nUse the arguments above verbatim — changing them would test something else. If the step succeeds this time, say what changed; if it fails again, read the original event with session_event_read(seq={seq}) and compare the two errors before guessing.',
+          'Please re-run exactly this step of the session and report the result.\n\nSource: {source}\nTurn: {turn}\nTool: {tool}\nArguments: {args}\nCode: {code}\nLikely cause: {cause}\nError: {summary}\nSession id: {sessionId}{childNote}\nSession event seq: {seq}\n\nUse the arguments above verbatim — changing them would test something else. If the step succeeds this time, say what changed and end the reply with a line of its own: {marker} (verbatim) so the monitor can tick this card off; if it fails again, read the original event with session_event_read(seq={seq}) and compare the two errors before guessing.',
         'send.fix':
-          'I hit an error in this session. Fix it now — do not stop at a diagnosis.\n\nSource: {source}\nTurn: {turn}\nTool: {tool}\nArguments: {args}\nCode: {code}\nLikely cause: {cause}\nSuggested fix: {next}\nError: {summary}\nSession id: {sessionId}\nSession event seq: {seq}\nRepair commands:\n{fixes}\n\nWork in this order:\n1. Read the original event with session_event_read(seq={seq}) (add session_id={sessionId} if needed) and confirm the real error and the exact place it failed: file, line, port, process or argument.\n2. Apply the fix directly — edit the file, change the argument, stop the blocking process, install the missing module or correct the path. If it needs a permission escalation or touches a file outside the workspace, say so before acting.\n3. Rerun exactly this call to verify, with the same tool and the same arguments; do not swap in a different test.\n4. Report three things: what changed, the verification result, and — if it still fails — where to look next. If this should not be repaired automatically (deletes, privacy, an external account), stop and state only what the user has to do.\n5. If — and only if — the rerun succeeded, end the reply with a line of its own: ERROR-MONITOR-FIXED seq={seq} (verbatim). The monitor reads that line to tick this card off; never write it when the fix is unverified or still failing.',
+          'I hit an error in this session. Fix it now — do not stop at a diagnosis.\n\nSource: {source}\nTurn: {turn}\nTool: {tool}\nArguments: {args}\nCode: {code}\nLikely cause: {cause}\nSuggested fix: {next}\nError: {summary}\nSession id: {sessionId}{childNote}\nSession event seq: {seq}\nRepair commands:\n{fixes}\n\nWork in this order:\n1. Read the original event with session_event_read(seq={seq}) (add session_id={sessionId} if needed) and confirm the real error and the exact place it failed: file, line, port, process or argument.\n2. Apply the fix directly — edit the file, change the argument, stop the blocking process, install the missing module or correct the path. If it needs a permission escalation or touches a file outside the workspace, say so before acting.\n3. {verifyStep}\n4. Report three things: what changed, the verification result, and — if it still fails — where to look next. If this should not be repaired automatically (deletes, privacy, an external account), stop and state only what the user has to do.\n5. If — and only if — the rerun succeeded, end the reply with a line of its own: {marker} (verbatim). The monitor reads that line to tick this card off; never write it when the fix is unverified or still failing.',
         'send.fixNone': '(no ready-made command for this cause — derive one from the suggested fix above)',
+        'send.childNote':
+          '\nThis failure happened inside a subagent session {id}: read it with session_id={id}, not the parent session id.',
+        'send.verifyParent':
+          'Rerun exactly this call to verify, with the same tool and the same arguments; do not swap in a different test.',
+        'send.verifyChild':
+          'That call lived in the subagent session, which has already ended, so verify differently: redo the same delegation from the parent session, or check the file, port or environment you changed.',
         'send.turn': '{n}',
         'send.unknown': 'unknown',
         'new.tag': 'NEW',
@@ -283,7 +294,11 @@ const AUTO_PREFIX = PACKAGE + '.autofix.';
         'panel.showMore': '显示更早的 {n} 条',
   'panel.notes': '{n} 条模型已自行重试',
   'panel.notesHint': '模型一般会自己重试，通常不用管；想看原始报错再展开。',
+  'panel.childOverflow': '另有 {n} 个子智能体会话没有读取（上限 {max} 个）。',
+  'item.thrashHint': '同一个工具、同一个原因已经出现 {n} 次，参数却各不相同——像是在原地试。先「只诊断」定位，再换做法，别继续重试。',
+  'item.childHint': '它自己的报错收在下方折叠区（{n} 条）。',
         'banner.new': '新报错 {n} 条',
+        'banner.autoResolved': '{n} 张卡片已按模型的修复回报自动标记为已解决',
         'banner.markRead': '标记已读',
         'banner.latest': '最新报错',
         'filter.all': '全部',
@@ -390,7 +405,7 @@ const AUTO_PREFIX = PACKAGE + '.autofix.';
         'next.missing': '确认这个地址或资源确实存在',
         'next.traceback': '读 traceback 最后一行，那里的异常类型和消息通常就是根因',
         'next.abort': '查清是谁取消了请求，再重新发起',
-        'next.default': '点「发回对话」，让模型读原始事件后给定位；别在参数上瞎试',
+        'next.default': '从「更多」里点「只诊断」，让模型读原始事件后给定位；别在参数上瞎试',
         'next.loop': '先别重发这次调用——{next}',
         'next.toolname': '别重发：是这个 provider 生不出可用的工具调用，本会话换模型或换路由',
         'next.safetynet': '看它点名的规则：把路径改名或挪出敏感范围，或让调用带上真实的工具名——原样重试不会有变化',
@@ -496,19 +511,25 @@ const AUTO_PREFIX = PACKAGE + '.autofix.';
         'item.more': '更多',
         'item.moreHint': '不常用的动作',
         'item.sending': '发送中…',
-        'item.sent': '已发回对话',
+        'item.sent': '已发送给模型',
         'item.sendFailed': '发送失败',
         'item.expand': '展开原始错误',
         'item.collapse': '收起原始错误',
         'send.prompt':
-          '我在本会话遇到一次报错，请帮我分析原因并给出处理方案。\n\n来源：{source}\n轮次：{turn}\n时间：{time}\n错误码：{code}\n初步归因：{cause}\n摘要：{summary}\n调用参数：{args}\n会话 ID：{sessionId}\n会话事件 seq：{seq}\n\n上面的摘要是精简过的。请先读原始事件再判断：调用 session_event_read，seq={seq}（需要指定会话时加 session_id={sessionId}；若该 ID 被拒绝，就只用 seq={seq} 读当前会话），然后基于真实报错文本分析，不要凭摘要猜。',
+          '我在本会话遇到一次报错，请帮我分析原因并给出处理方案。\n\n来源：{source}\n轮次：{turn}\n时间：{time}\n错误码：{code}\n初步归因：{cause}\n摘要：{summary}\n调用参数：{args}\n会话 ID：{sessionId}{childNote}\n会话事件 seq：{seq}\n\n上面的摘要是精简过的。请先读原始事件再判断：调用 session_event_read，seq={seq}（需要指定会话时加 session_id={sessionId}；若该 ID 被拒绝，就只用 seq={seq} 读当前会话），然后基于真实报错文本分析，不要凭摘要猜。',
         'send.promptFull':
-          '我在本会话遇到一次报错，请帮我分析原因并给出处理方案。\n\n来源：{source}\n轮次：{turn}\n时间：{time}\n错误码：{code}\n初步归因：{cause}\n调用参数：{args}\n会话 ID：{sessionId}\n会话事件 seq：{seq}\n原始错误：\n```\n{raw}\n```\n\n若上面的原文仍被截断，先用 session_event_read(seq={seq})（必要时加 session_id={sessionId}）读出原始事件再下结论。',
+          '我在本会话遇到一次报错，请帮我分析原因并给出处理方案。\n\n来源：{source}\n轮次：{turn}\n时间：{time}\n错误码：{code}\n初步归因：{cause}\n调用参数：{args}\n会话 ID：{sessionId}{childNote}\n会话事件 seq：{seq}\n原始错误：\n```\n{raw}\n```\n\n若上面的原文仍被截断，先用 session_event_read(seq={seq})（必要时加 session_id={sessionId}）读出原始事件再下结论。',
         'send.retry':
-          '请原样重跑本会话的这一步骤，并说明结果。\n\n来源：{source}\n轮次：{turn}\n工具：{tool}\n调用参数：{args}\n错误码：{code}\n初步归因：{cause}\n错误：{summary}\n会话 ID：{sessionId}\n会话事件 seq：{seq}\n\n参数请照原文使用，改了就是在测另一件事。若这次成功，说明是什么变了；若仍失败，先用 session_event_read(seq={seq}) 读原始事件，对比两次报错的差异再判断。',
+          '请原样重跑本会话的这一步骤，并说明结果。\n\n来源：{source}\n轮次：{turn}\n工具：{tool}\n调用参数：{args}\n错误码：{code}\n初步归因：{cause}\n错误：{summary}\n会话 ID：{sessionId}{childNote}\n会话事件 seq：{seq}\n\n参数请照原文使用，改了就是在测另一件事。若这次成功，说明是什么变了，并在回复最后单独写一行 {marker}（原样照抄），监控插件据此把卡片标为已解决；若仍失败，先用 session_event_read(seq={seq}) 读原始事件，对比两次报错的差异再判断。',
         'send.fix':
-          '我在本会话遇到一次报错，请直接修复，不要停在诊断。\n\n来源：{source}\n轮次：{turn}\n工具：{tool}\n调用参数：{args}\n错误码：{code}\n初步归因：{cause}\n处理建议：{next}\n错误摘要：{summary}\n会话 ID：{sessionId}\n会话事件 seq：{seq}\n修复命令：\n{fixes}\n\n按这个顺序做：\n1. 先 session_event_read(seq={seq}) 读原始事件（需要时加 session_id={sessionId}），确认真实报错和失败的具体位置：文件、行号、端口、进程或参数。\n2. 直接执行修复：改文件、改参数、停掉占用进程、补装缺失模块或纠正路径。需要提权、或要动工作区外的文件，先说清再动手。\n3. 修完后原样重跑这一次调用验证——同一个工具、同一份参数，别换成另一个测试。\n4. 汇报三件事：改了什么、验证结果、如果还失败下一步该看哪里。若判断不该在本会话自动修（涉及删除、隐私、外部账号），停下来说清需要用户做什么。\n5. 只有重跑确认成功时，才在回复最后单独写一行：ERROR-MONITOR-FIXED seq={seq}（原样照抄）。监控插件读这一行把卡片标为已解决；没验证过、或还失败，不要写。',
+          '我在本会话遇到一次报错，请直接修复，不要停在诊断。\n\n来源：{source}\n轮次：{turn}\n工具：{tool}\n调用参数：{args}\n错误码：{code}\n初步归因：{cause}\n处理建议：{next}\n错误摘要：{summary}\n会话 ID：{sessionId}{childNote}\n会话事件 seq：{seq}\n修复命令：\n{fixes}\n\n按这个顺序做：\n1. 先 session_event_read(seq={seq}) 读原始事件（需要时加 session_id={sessionId}），确认真实报错和失败的具体位置：文件、行号、端口、进程或参数。\n2. 直接执行修复：改文件、改参数、停掉占用进程、补装缺失模块或纠正路径。需要提权、或要动工作区外的文件，先说清再动手。\n3. {verifyStep}\n4. 汇报三件事：改了什么、验证结果、如果还失败下一步该看哪里。若判断不该在本会话自动修（涉及删除、隐私、外部账号），停下来说清需要用户做什么。\n5. 只有重跑确认成功时，才在回复最后单独写一行：{marker}（原样照抄）。监控插件读这一行把卡片标为已解决；没验证过、或还失败，不要写。',
         'send.fixNone': '（这个根因没有现成命令，按上面的处理建议自行推导）',
+        'send.childNote':
+          '\n这条失败发生在子智能体会话 {id} 里：读取时要用 session_id={id}，不要用父会话 ID。',
+        'send.verifyParent':
+          '修完后原样重跑这一次调用验证——同一个工具、同一份参数，别换成另一个测试。',
+        'send.verifyChild':
+          '这一步发生在已经结束的子智能体会话里，没法原样重跑：要么在父会话里重做一次同样的委派来验证，要么直接检查你改的文件、端口或环境。',
         'send.turn': '第 {n} 轮',
         'send.unknown': '未知',
         'new.tag': '新',
@@ -723,6 +744,41 @@ const AUTO_PREFIX = PACKAGE + '.autofix.';
      * it survives restarts and covers every repeat of the same root cause; a new
      * occurrence of a fixed failure still shows up as unread.
      */
+    /**
+     * Child generations carry their own sequence space, so the parent's single
+     * watermark cannot judge them: seq 3 in a child is neither before nor after
+     * "read up to 40" in the parent. One small map per session, keyed by child.
+     */
+    const SEEN_CHILD_CAP = 60;
+
+    function readSeenChildren(sessionId) {
+      const raw = readStoreString(SEEN_CHILD_PREFIX + String(sessionId));
+      if (raw === null) return {};
+      try {
+        const parsed = JSON.parse(raw);
+        if (!isRecord(parsed)) return {};
+        const map = {};
+        for (const id of Object.keys(parsed)) {
+          const value = parsed[id];
+          if (typeof value === 'number' && Number.isFinite(value)) map[id] = value;
+        }
+        return map;
+      } catch {
+        return {};
+      }
+    }
+
+    function writeSeenChildren(sessionId, map) {
+      const keys = Object.keys(map);
+      const trimmed = {};
+      for (const id of keys.slice(Math.max(0, keys.length - SEEN_CHILD_CAP))) trimmed[id] = map[id];
+      writeStoreString(SEEN_CHILD_PREFIX + String(sessionId), keys.length === 0 ? null : JSON.stringify(trimmed));
+    }
+
+    function useSeenChildren(sessionId) {
+      return useStoreString(SEEN_CHILD_PREFIX + String(sessionId));
+    }
+
     const RESOLVED_CAP = 300;
 
     function readResolved(sessionId) {
@@ -898,6 +954,11 @@ const AUTO_PREFIX = PACKAGE + '.autofix.';
      * records are tagged with their child id; ordering uses a separate orderSeq that
      * the caller derives from the parent's failure notice.
      */
+    /** Child transcripts are re-read at most once per window, and polled that often. */
+    const CHILD_TTL_MS = 20000;
+    const CHILD_CAP = 25;
+    const CHILD_BATCH = 5;
+
     async function readChildRecords(sessions, childId) {
       if (sessions === undefined || typeof childId !== 'string' || childId === '') return [];
       try {
@@ -963,6 +1024,16 @@ const AUTO_PREFIX = PACKAGE + '.autofix.';
       const topSeq = records.length === 0 ? 0 : records[0].seq;
       const seenKey = SEEN_PREFIX + String(sessionId);
       const seen = useSeenValue(seenKey);
+      const seenChildRaw = useSeenChildren(sessionId);
+      const seenChildren = useMemo(() => {
+        if (seenChildRaw === null) return {};
+        try {
+          const parsed = JSON.parse(seenChildRaw);
+          return isRecord(parsed) ? parsed : {};
+        } catch {
+          return {};
+        }
+      }, [seenChildRaw]);
 
       // Seeding happens on first sight of a session with no watermark yet: without
       // it, installing the plugin (or a fresh storage) would light up every
@@ -975,8 +1046,8 @@ const AUTO_PREFIX = PACKAGE + '.autofix.';
       // A child generation's errors never reach the parent's live window. Discover
       // its id from failure notices and from the catalog (workflow children send no
       // notice), then open each child's eventSource once and fold its own failures.
-      const childIds = useMemo(() => {
-        if (!withChildren) return [];
+      const childScan = useMemo(() => {
+        if (!withChildren) return { ids: [], overflow: 0 };
         const found = [];
         const push = (id) => {
           if (typeof id === 'string' && id !== '' && found.indexOf(id) === -1) found.push(id);
@@ -992,8 +1063,10 @@ const AUTO_PREFIX = PACKAGE + '.autofix.';
           }
         }
         // Notices are the strongest signal, so keep them ahead of a long catalog.
-        return found.slice(0, 25);
+        return { ids: found.slice(0, CHILD_CAP), overflow: Math.max(0, found.length - CHILD_CAP) };
       }, [records, listSnapshot, sessionId, withChildren]);
+      const childIds = childScan.ids;
+      const childOverflow = childScan.overflow;
       const childIdsKey = childIds.join(String.fromCharCode(1));
       // Keyed by child id and re-read whenever the parent learns of a new failure,
       // so a child that failed again is never frozen at its first read. The effect
@@ -1004,19 +1077,44 @@ const AUTO_PREFIX = PACKAGE + '.autofix.';
       const recordsRef = useRef(records);
       recordsRef.current = records;
       const [childRecords, setChildRecords] = useState([]);
+      const [childTick, setChildTick] = useState(0);
+      const childSet = useRef('');
+      const childCursor = useRef(0);
 
       useEffect(() => {
         let cancelled = false;
         const ids = childIdsKey === '' ? [] : childIdsKey.split(String.fromCharCode(1));
+        // Opening 25 children at once costs 25 retain/release round trips. Read a
+        // slice per pass instead, rotating; only a change in the child set (or a
+        // first sight) reads them all, because those records are new anyway.
+        const previous = childSet.current === '' ? [] : childSet.current.split(String.fromCharCode(1));
+        const added = ids.filter((id) => previous.indexOf(id) === -1);
+        childSet.current = childIdsKey;
+        let batch;
+        if (previous.length === 0) {
+          batch = ids;
+        } else if (added.length > 0) {
+          // A new child is the one most likely to be mid-run: read it now, and let
+          // the rotation pick up the rest.
+          batch = added.slice(0, CHILD_BATCH);
+        } else if (ids.length > CHILD_BATCH) {
+          const start = childCursor.current % ids.length;
+          batch = [];
+          for (let k = 0; k < CHILD_BATCH; k += 1) batch.push(ids[(start + k) % ids.length]);
+          childCursor.current = start + batch.length;
+        } else {
+          batch = ids;
+        }
         const run = async () => {
           const current = sessionsRef.current;
           const cache = childCache.current;
-          for (const id of ids) {
+          for (const id of batch) {
             const entry = cache.get(id);
-            if (entry !== undefined && entry.topSeq === topSeq) continue;
+            const age = entry === undefined ? Infinity : Date.now() - (Number.isFinite(entry.stamp) ? entry.stamp : 0);
+            if (entry !== undefined && entry.topSeq === topSeq && age < CHILD_TTL_MS) continue;
             const fresh = await readChildRecords(current, id);
             if (cancelled) return;
-            cache.set(id, { records: fresh, topSeq });
+            cache.set(id, { records: fresh, topSeq, stamp: Date.now() });
           }
           if (cancelled) return;
           const merged = [];
@@ -1042,7 +1140,33 @@ const AUTO_PREFIX = PACKAGE + '.autofix.';
         };
         void run();
         return () => { cancelled = true; };
-      }, [childIdsKey, topSeq, records.length]);
+      }, [childIdsKey, topSeq, records.length, childTick]);
+
+      // A workflow child reports nothing to its parent, so its own transcript can
+      // advance with the parent's topSeq standing still: poll slowly while any child
+      // exists instead of trusting that sole trigger.
+      useEffect(() => {
+        if (!withChildren || childIdsKey === '') return undefined;
+        const timer = window.setInterval(() => setChildTick((value) => value + 1), CHILD_TTL_MS);
+        return () => window.clearInterval(timer);
+      }, [childIdsKey, withChildren]);
+
+      // First sight of a session must not light up history either: seed each child's
+      // watermark from the failures already read for it, once.
+      const childSeeded = useRef(false);
+      useEffect(() => {
+        if (!baseline || childSeeded.current || childRecords.length === 0) return;
+        const map = readSeenChildren(sessionId);
+        let touched = false;
+        for (const record of childRecords) {
+          if (typeof record.childId !== 'string' || !Number.isFinite(record.seq)) continue;
+          if (typeof map[record.childId] === 'number') continue;
+          map[record.childId] = record.seq;
+          touched = true;
+        }
+        childSeeded.current = true;
+        if (touched) writeSeenChildren(sessionId, map);
+      }, [baseline, childRecords, sessionId]);
 
       // A child generation's own failures only count when no parent notice already
       // reports that child: counting both would show one failure twice.
@@ -1056,10 +1180,11 @@ const AUTO_PREFIX = PACKAGE + '.autofix.';
         for (const record of records) if (fresh(record.seq)) count += 1;
         for (const record of childRecords) {
           if (noticeChildren.has(record.childId)) continue;
-          if (fresh(typeof record.orderSeq === 'number' ? record.orderSeq : record.seq)) count += 1;
+          const mark = seenChildren[record.childId];
+          if (typeof mark === 'number' && Number.isFinite(record.seq) && record.seq > mark) count += 1;
         }
         return count;
-      }, [records, childRecords, seen, baseline]);
+      }, [records, childRecords, seen, seenChildren, baseline]);
 
       // Reading one failure is not reading the newer ones, so the watermark only
       // moves up to that record.
@@ -1076,7 +1201,18 @@ const AUTO_PREFIX = PACKAGE + '.autofix.';
           if (typeof record.orderSeq === 'number' && record.orderSeq > through) through = record.orderSeq;
         }
         markReadThrough(through);
-      }, [markReadThrough, topSeq, childRecords]);
+        // Children need their own marks: the parent watermark says nothing about
+        // a sequence space that restarts at 1.
+        const map = readSeenChildren(sessionId);
+        let touched = false;
+        for (const record of childRecords) {
+          if (typeof record.childId !== 'string' || !Number.isFinite(record.seq)) continue;
+          if (typeof map[record.childId] === 'number' && map[record.childId] >= record.seq) continue;
+          map[record.childId] = record.seq;
+          touched = true;
+        }
+        if (touched) writeSeenChildren(sessionId, map);
+      }, [markReadThrough, topSeq, childRecords, sessionId]);
 
       // Older pages are not in the live window: one Turn-aligned page per request.
       const loadOlder = useCallback(() => {
@@ -1091,6 +1227,8 @@ const AUTO_PREFIX = PACKAGE + '.autofix.';
         session,
         records,
         childRecords,
+        childOverflow,
+        seenChildren,
         fixedSeqs,
         topSeq,
         seen,
@@ -1138,7 +1276,8 @@ const AUTO_PREFIX = PACKAGE + '.autofix.';
       }
       const seqs = [];
       for (const item of items) {
-        if (item.source === 'turn' || counts.get(item.source + '\u0000' + item.text) >= LOOP_MIN_COUNT) {
+        const repeated = counts.get(item.source + '\u0000' + item.text) >= LOOP_MIN_COUNT;
+        if (item.source === 'turn' || item.source === 'subagent' || repeated) {
           seqs.push(item.seq);
         }
       }
@@ -1592,6 +1731,28 @@ const AUTO_PREFIX = PACKAGE + '.autofix.';
       'cause.webnet': ["curl.exe -sI --max-time 10 '{url}'"],
     };
 
+    /**
+     * The same repairs for a POSIX shell. Rendered only when the failure itself
+     * points at one (a /abs/path, bash: or sh: text): a PowerShell line on a mac
+     * is a command that fails, which is worse than no command at all.
+     */
+    const FIX_COMMANDS_POSIX = {
+      'cause.port': ["ss -ltnp 'sport = :{port}' 2>/dev/null || lsof -nP -iTCP:{port} -sTCP:LISTEN"],
+      'cause.enoent': ["test -e '{path}' && ls -ld '{path}' || ls -la '{dir}' | head -20"],
+      'cause.notdir': ["ls -ld '{path}'"],
+      'cause.module': ['python -m pip install {module}'],
+      'cause.command': ['command -v {command} || type -a {command}'],
+      'cause.nospace': ['df -h .'],
+      'cause.nogit': ['git rev-parse --show-toplevel', 'ls -la | head -20'],
+      'cause.eresolve': ['pnpm install --no-strict-peer-dependencies'],
+      'cause.npm': ['pnpm install'],
+      'cause.encoding': ["file '{path}' && head -c 200 '{path}' | iconv -f utf-8 -t utf-8 >/dev/null && echo utf8-ok"],
+      'cause.dns': ['getent hosts {host} || nslookup {host}'],
+      'cause.refused': ["timeout 5 bash -c 'exec 3<>/dev/tcp/{host}/{port}' && echo open || echo blocked"],
+      'cause.tls': ["curl -vI '{url}' 2>&1 | grep -iE 'ssl|certificate|expire'"],
+      'cause.webnet': ["curl -sI --max-time 10 '{url}'"],
+    };
+
     function firstMatch(text, re) {
       if (typeof text !== 'string' || text === '') return '';
       const match = re.exec(text);
@@ -1633,7 +1794,11 @@ const AUTO_PREFIX = PACKAGE + '.autofix.';
       const command =
         firstMatch(raw, /([\w.-]+)[^\n]{0,40}(?:is not recognized as|不是内部或外部命令)/i) ||
         firstMatch(raw, /(?:command not found|找不到)[:\s]*([\w.-]+)/i);
-      return { path, dir, url, host, port, module: moduleName, command };
+      const unixPath = path.charAt(0) === '/';
+      const windowsPath = /^[A-Za-z]:[\\/]/.test(path);
+      const unixText = /\bash:|\/bin\/sh\b|\bsh: \d+:/i.test(raw) || /command not found/i.test(raw);
+      const platform = windowsPath || (!unixPath && !unixText) ? 'ps' : 'posix';
+      return { path, dir, url, host, port, module: moduleName, command, platform };
     }
 
     /**
@@ -1644,12 +1809,14 @@ const AUTO_PREFIX = PACKAGE + '.autofix.';
      * prompt only.
      */
     function repairCommands(record, causeKey) {
-      const templates = causeKey !== null ? FIX_COMMANDS[causeKey] : undefined;
-      if (templates === undefined) return [];
+      if (causeKey === null) return [];
       const raw = [record.detail, record.message, record.code, record.raw, record.args]
         .filter((part) => typeof part === 'string' && part !== '')
         .join('\n');
       const values = repairValues(record, raw);
+      const table = values.platform === 'posix' ? FIX_COMMANDS_POSIX : FIX_COMMANDS;
+      const templates = table[causeKey];
+      if (templates === undefined) return [];
       let complete = true;
       const lines = templates.map((line) =>
         line.replace(/\{(\w+)\}/g, (whole, name) => {
@@ -1808,12 +1975,17 @@ const AUTO_PREFIX = PACKAGE + '.autofix.';
      * card is ticked off without the user clicking anything, and a fix that was
      * never verified never emits the line, so nothing is marked by accident.
      */
-    const FIXED_MARKER = /ERROR-MONITOR-FIXED\s+seq=(\d+)/g;
+    const FIXED_MARKER = /ERROR-MONITOR-FIXED\s+seq=(\d+)(?:\s+child=([A-Za-z0-9_.:-]+))?/g;
 
-    /** The seqs the agent reported as verified-fixed in its own messages. */
+    /**
+     * The seqs the agent reported as verified-fixed in its own messages. A child
+     * card must name its child: child sequences restart at 1, so "seq=12" alone
+     * would also tick off an unrelated parent failure with the same number.
+     */
     function fixedSeqsIn(entries) {
-      const seqs = new Set();
-      if (!Array.isArray(entries)) return seqs;
+      const parent = new Set();
+      const children = new Map();
+      if (!Array.isArray(entries)) return { parent, children };
       for (const entry of entries) {
         const event = durableEvent(entry);
         if (event === undefined || event.type !== 'assistant/message') continue;
@@ -1827,10 +1999,18 @@ const AUTO_PREFIX = PACKAGE + '.autofix.';
         if (text === '') continue;
         for (const match of text.matchAll(FIXED_MARKER)) {
           const seq = Number(match[1]);
-          if (Number.isFinite(seq)) seqs.add(seq);
+          if (!Number.isFinite(seq)) continue;
+          const child = typeof match[2] === 'string' ? match[2] : '';
+          if (child === '') {
+            parent.add(seq);
+            continue;
+          }
+          const bucket = children.get(child) ?? new Set();
+          bucket.add(seq);
+          children.set(child, bucket);
         }
       }
-      return seqs;
+      return { parent, children };
     }
 
     /**
@@ -2117,6 +2297,20 @@ const AUTO_PREFIX = PACKAGE + '.autofix.';
      */
     const LOOP_MIN_COUNT = 3;
 
+    /**
+     * A loop that changes its arguments every time still shows one tool and one
+     * cause again and again. Identical-text counting misses it; counting the pair
+     * catches the agent thrashing without merging unrelated failures that merely
+     * share a tool.
+     */
+    const THRASH_MIN_COUNT = 3;
+
+    function thrashKeyOf(group) {
+      const tool = typeof group.tool === 'string' ? group.tool : '';
+      const cause = typeof group.cause === 'string' ? group.cause : '';
+      return tool === '' || cause === '' ? '' : tool + String.fromCharCode(0) + cause;
+    }
+
     function pad(value) {
       return String(value).padStart(2, '0');
     }
@@ -2204,6 +2398,9 @@ const AUTO_PREFIX = PACKAGE + '.autofix.';
 .emx-message { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 12px; line-height: 18px; color: var(--dsw-alias-label-primary); white-space: pre-wrap; word-break: break-word; background: var(--dsw-alias-bg-base); border: 1px solid var(--dsw-alias-border-l1); border-radius: var(--dsw-radius-sm); padding: 6px 8px; max-height: 132px; overflow: auto; }
 .emx-cause { font-size: 12px; line-height: 18px; color: var(--dsw-alias-label-secondary); padding-left: 8px; border-left: 2px solid var(--dsw-alias-state-error-primary); }
 .emx-next { font-size: 12px; line-height: 18px; color: var(--dsw-alias-label-primary); padding-left: 8px; border-left: 2px solid var(--dsw-alias-state-success-primary); }
+.emx-childHint { font-size: 11px; line-height: 16px; color: var(--dsw-alias-label-secondary); padding-left: 8px; }
+.emx-thrashHint { font-size: 11px; line-height: 16px; color: var(--dsw-alias-state-error-primary); padding-left: 8px; }
+.emx-autoNote { margin: 0 14px 10px; padding: 6px 10px; border-radius: var(--dsw-radius-md); border: 1px dashed var(--dsw-alias-label-secondary); color: var(--dsw-alias-label-secondary); font-size: 12px; display: flex; align-items: center; gap: 8px; }
 .emx-badgeFatal { border-color: var(--dsw-alias-state-error-primary); color: var(--dsw-alias-state-error-primary); font-weight: 600; }
 .emx-badgeRecover { color: var(--dsw-alias-label-tertiary); }
 .emx-badgeNote { color: var(--dsw-alias-label-secondary); border-style: dashed; }
@@ -2262,7 +2459,7 @@ const AUTO_PREFIX = PACKAGE + '.autofix.';
       const slots = ctx.slots;
 
       function ErrorItem(props) {
-        const { record, t, isNew, session, onHandled, sessionId, resolved, onResolve, onUnresolve, note, moreOpen, onToggleMore } = props;
+        const { record, t, isNew, session, onHandled, sessionId, resolved, onResolve, onUnresolve, note, moreOpen, onToggleMore, childFailures, thrashCount } = props;
         const sessionRef =
           typeof record.childId === 'string' && record.childId !== ''
             ? record.childId
@@ -2384,6 +2581,10 @@ const AUTO_PREFIX = PACKAGE + '.autofix.';
         const sendPrompt = useCallback(
           async (templateKey, extra) => {
             if (session === undefined) return;
+            // A child generation's failures live in the child's own transcript:
+            // handing the agent the parent id makes it read the wrong event.
+            const childId = record.fromChild && typeof record.childId === 'string' ? record.childId : '';
+            const marker = 'ERROR-MONITOR-FIXED seq=' + String(record.seq) + (childId === '' ? '' : ' child=' + childId);
             setSendState('sending');
             const text = t(templateKey, {
               source: label,
@@ -2395,7 +2596,10 @@ const AUTO_PREFIX = PACKAGE + '.autofix.';
               seq: String(record.seq),
               cause: causeKey === null ? t('cause.unknown') : causeText,
               args: argsText === '' ? t('send.unknown') : record.args,
-              sessionId: sessionRef,
+              sessionId: childId === '' ? sessionRef : childId,
+              childNote: childId === '' ? '' : t('send.childNote', { id: childId }),
+              marker,
+              verifyStep: childId === '' ? t('send.verifyParent') : t('send.verifyChild'),
               ...extra,
             });
             try {
@@ -2410,7 +2614,7 @@ const AUTO_PREFIX = PACKAGE + '.autofix.';
             if (timer.current !== null) window.clearTimeout(timer.current);
             timer.current = window.setTimeout(() => setSendState(''), 3200);
           },
-          [session, label, record.turn, record.code, record.tool, record.seq, timeText, summary, causeKey, causeText, argsText, record.args, sessionRef, t],
+          [session, label, record.turn, record.code, record.tool, record.seq, timeText, summary, causeKey, causeText, argsText, record.args, record.fromChild, record.childId, sessionRef, t],
         );
 
         const onSend = useCallback(
@@ -2510,6 +2714,12 @@ const AUTO_PREFIX = PACKAGE + '.autofix.';
             ? null
             : h('div', { className: 'emx-cause' }, t('item.cause', { cause: causeText })),
           h('div', { className: 'emx-next' }, t('item.next', { next: nextText })),
+        childFailures > 0
+          ? h('div', { className: 'emx-childHint' }, t('item.childHint', { n: String(childFailures) }))
+          : null,
+          thrashCount >= THRASH_MIN_COUNT
+            ? h('div', { className: 'emx-thrashHint' }, t('item.thrashHint', { n: String(thrashCount) }))
+            : null,
           fixCommands.length === 0 || note
             ? null
             : h(
@@ -2656,9 +2866,20 @@ const AUTO_PREFIX = PACKAGE + '.autofix.';
             : undefined;
 
         const sessionId = given;
-        const { session, records, childRecords, fixedSeqs, topSeq, seen, unread, markRead, markReadThrough, hasMore, loadingOlder, loadOlder } =
+        const { session, records, childRecords, childOverflow, seenChildren, fixedSeqs, topSeq, seen, unread, markRead, markReadThrough, hasMore, loadingOlder, loadOlder } =
           useErrorFeed(ctx, sessionId, { baseline: true });
         const grouped = useMemo(() => groupRecords(sortRecords(records.concat(childRecords))), [records, childRecords]);
+        const childCountById = useMemo(() => {
+          const counts = new Map();
+          for (const record of childRecords) {
+            if (typeof record.childId === 'string') counts.set(record.childId, (counts.get(record.childId) ?? 0) + 1);
+          }
+          return counts;
+        }, [childRecords]);
+        const childFailuresOf = useCallback(
+          (record) => (typeof record.child === 'string' ? childCountById.get(record.child) ?? 0 : 0),
+          [childCountById],
+        );
         const totalCount = records.length + childRecords.length;
         const [sourceFilter, setSourceFilter] = useState('all');
         const [unreadOnly, setUnreadOnly] = useState(false);
@@ -2699,23 +2920,42 @@ const AUTO_PREFIX = PACKAGE + '.autofix.';
         // seq can be ticked off here instead of waiting for a click. A mark the
         // user already made is left alone — their state wins.
         useEffect(() => {
-          if (fixedSeqs === undefined || fixedSeqs.size === 0) return;
+          if (fixedSeqs === undefined || (fixedSeqs.parent.size === 0 && fixedSeqs.children.size === 0)) return;
           const ledger = readAutoFix(sessionId);
           let changed = false;
+          let ticked = 0;
           for (const group of records.concat(childRecords)) {
             const seqs = Array.isArray(group.seqs) && group.seqs.length > 0 ? group.seqs : [group.seq];
             const key = groupKey(group);
             const applied = Array.isArray(ledger[key]) ? ledger[key] : [];
+            const childId = typeof group.childId === 'string' ? group.childId : '';
+            const reported = childId === '' ? fixedSeqs.parent : fixedSeqs.children.get(childId);
+            if (reported === undefined || reported.size === 0) continue;
             const fresh = seqs
               .map(Number)
-              .filter((seq) => Number.isFinite(seq) && fixedSeqs.has(seq) && applied.indexOf(seq) === -1);
+              .filter((seq) => Number.isFinite(seq) && reported.has(seq) && applied.indexOf(seq) === -1);
             if (fresh.length === 0) continue;
             if (resolvedMap[key] === undefined) markResolved(sessionId, key, Date.now());
             ledger[key] = applied.concat(fresh);
+            ticked += fresh.length;
             changed = true;
           }
           if (changed) writeAutoFix(sessionId, ledger);
+          if (ticked > 0) setAutoTicked((value) => value + ticked);
         }, [fixedSeqs, records, childRecords, resolvedMap, sessionId]);
+        // A child card is new when its own child watermark is behind it, not when
+        // the parent's watermark is: the two sequence spaces never compare.
+        const freshGroup = useCallback(
+          (group) => {
+            if (group.fromChild) {
+              const mark = seenChildren[group.childId];
+              return typeof mark === 'number' && Number.isFinite(group.seq) && group.seq > mark;
+            }
+            return seen !== null && watermarkOf(group) > seen;
+          },
+          [seen, seenChildren],
+        );
+        const freshRecord = useCallback((record) => freshGroup(record), [freshGroup]);
         // Space-separated keywords AND together, so "edit sandbox" requires both
         // to hit — a keyword may land on a different field than another.
         const needles = needle === '' ? [] : needle.split(/\s+/);
@@ -2723,7 +2963,7 @@ const AUTO_PREFIX = PACKAGE + '.autofix.';
           () =>
             grouped.filter((group) => {
               if (sourceFilter !== 'all' && group.source !== sourceFilter) return false;
-              if (unreadOnly && !(seen !== null && watermarkOf(group) > seen)) return false;
+              if (unreadOnly && !freshGroup(group)) return false;
               if (hideResolved && resolvedMap[groupKey(group)] !== undefined) return false;
               if (needles.length > 0) {
                 // The keywords match any of: human-readable message, complete raw
@@ -2739,7 +2979,7 @@ const AUTO_PREFIX = PACKAGE + '.autofix.';
               }
               return true;
             }),
-          [grouped, sourceFilter, unreadOnly, seen, needles, hideResolved, resolvedMap],
+          [grouped, sourceFilter, unreadOnly, freshGroup, needles, hideResolved, resolvedMap],
         );
         // A failure the agent recovered from on its own is history, not a task:
         // it lives in a fold at the bottom of the list and never raises the banner.
@@ -2748,20 +2988,49 @@ const AUTO_PREFIX = PACKAGE + '.autofix.';
         // One shared switch: while triaging a burst, opening 更多 on one card opens
         // it on every card, instead of a re-click per card.
         const [moreOpen, setMoreOpen] = useState(false);
+        // Auto-ticking is silent otherwise: a card can vanish while the reader is
+        // looking at it. One line, self-clearing, keeps that from reading as a bug.
+        const [autoTicked, setAutoTicked] = useState(0);
         const toggleMore = useCallback(() => setMoreOpen((value) => !value), []);
+        const thrashCounts = useMemo(() => {
+          const counts = new Map();
+          for (const group of visible) {
+            if (group.source === 'turn' || group.source === 'subagent') continue;
+            if (resolvedMap[groupKey(group)] !== undefined) continue;
+            const key = thrashKeyOf(group);
+            if (key === '') continue;
+            counts.set(key, (counts.get(key) ?? 0) + 1);
+          }
+          return counts;
+        }, [visible, resolvedMap]);
+        const thrashOf = useCallback((group) => {
+          const key = thrashKeyOf(group);
+          return key === '' ? 0 : (thrashCounts.get(key) ?? 0);
+        }, [thrashCounts]);
         const isNoteGroup = useCallback(
-          (group) => group.source !== 'turn' && group.count < LOOP_MIN_COUNT && resolvedMap[groupKey(group)] === undefined,
-          [resolvedMap],
+          (group) =>
+            group.source !== 'turn' &&
+            group.source !== 'subagent' &&
+            group.count < LOOP_MIN_COUNT &&
+            thrashOf(group) < THRASH_MIN_COUNT &&
+            resolvedMap[groupKey(group)] === undefined,
+          [resolvedMap, thrashOf],
         );
         const noteGroups = useMemo(() => visible.filter(isNoteGroup), [visible, isNoteGroup]);
         const mainGroups = useMemo(() => visible.filter((group) => !isNoteGroup(group)), [visible, isNoteGroup]);
         // Counting records rather than groups: "3 new" reads as three failures,
         // which is what the banner promises.
-        const attentionNew = useMemo(
-          () =>
-            seen === null ? 0 : mainGroups.reduce((sum, group) => (watermarkOf(group) > seen ? sum + group.count : sum), 0),
-          [mainGroups, seen],
-        );
+        const attentionNew = useMemo(() => {
+          if (seen === null) return 0;
+          let total = 0;
+          for (const group of mainGroups) if (freshGroup(group)) total += group.count;
+          return total;
+        }, [mainGroups, freshGroup]);
+        useEffect(() => {
+          if (autoTicked === 0) return undefined;
+          const timer = window.setTimeout(() => setAutoTicked(0), 8000);
+          return () => window.clearTimeout(timer);
+        }, [autoTicked]);
         const onCopyReport = useCallback(async () => {
           const parts = [];
           parts.push('# ' + t('report.title'));
@@ -2948,6 +3217,18 @@ const AUTO_PREFIX = PACKAGE + '.autofix.';
                 h('button', { type: 'button', className: 'emx-btn', onClick: markRead }, t('banner.markRead')),
               )
             : null,
+          autoTicked > 0
+            ? h(
+                'div',
+                { className: 'emx-autoNote', role: 'status' },
+                h('span', null, t('banner.autoResolved', { n: String(autoTicked) })),
+                h(
+                  'button',
+                  { type: 'button', className: 'emx-btn emx-btnQuiet', onClick: () => setAutoTicked(0) },
+                  '\u00d7',
+                ),
+              )
+            : null,
           hasMore
             ? h(
                 'div',
@@ -2981,9 +3262,11 @@ const AUTO_PREFIX = PACKAGE + '.autofix.';
                       sessionId,
                       moreOpen,
                       onToggleMore: toggleMore,
-                      isNew: seen !== null && watermarkOf(record) > seen,
+                      isNew: freshRecord(record),
                       onHandled: record.fromChild ? undefined : markReadThrough,
                       resolved: resolvedMap[groupKey(record)] !== undefined,
+                      childFailures: childFailuresOf(record),
+                      thrashCount: thrashOf(record),
                       onResolve,
                       onUnresolve,
                     }),
@@ -2997,6 +3280,13 @@ const AUTO_PREFIX = PACKAGE + '.autofix.';
                           onClick: () => setRenderLimit((value) => value + 50),
                         },
                         t('panel.showMore', { n: String(mainGroups.length - renderLimit) }),
+                      )
+                    : null,
+                  childOverflow > 0
+                    ? h(
+                        'div',
+                        { className: 'emx-noteHint' },
+                        t('panel.childOverflow', { n: String(childOverflow), max: String(CHILD_CAP) }),
                       )
                     : null,
                   // Everything below is what the agent already tried again on its
@@ -3036,6 +3326,8 @@ const AUTO_PREFIX = PACKAGE + '.autofix.';
                                   isNew: false,
                                   onHandled: record.fromChild ? undefined : markReadThrough,
                                   resolved: resolvedMap[groupKey(record)] !== undefined,
+                                  childFailures: childFailuresOf(record),
+                      thrashCount: thrashOf(record),
                                   onResolve,
                                   onUnresolve,
                                 }),

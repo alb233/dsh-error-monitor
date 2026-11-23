@@ -3,7 +3,7 @@
   "version": "1.6.0",
   "type": "module",
   "scripts": {
-    "check": "node tools/check-locale-keys.mjs && node tools/check-error-hints.mjs && node tools/check-repair-commands.mjs && node tools/check-fix-marker.mjs && node tools/check-client-load.mjs",
+    "check": "node tools/check-locale-keys.mjs && node tools/check-error-hints.mjs && node tools/check-repair-commands.mjs && node tools/check-fix-marker.mjs && node tools/check-subagent-prompts.mjs && node tools/check-main-hints.mjs && node tools/check-client-load.mjs",
     "audit": "node tools/audit-error-summaries.mjs"
   },
   "engines": {
