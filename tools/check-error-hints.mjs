@@ -71,6 +71,12 @@ const cases = [
   ['Error: status 必须是 pending / in_progress / done / blocked', 'cause.state'],
   ['Error: cross-origin redirect to https://cn.bing.com is not followed automatically; retry against that URL directly', 'cause.redirect'],
   ['Error: grep search failed (exit 2): rg: C:\\\\a\\\\app.asar\\\\dsh: IO error for operation', 'cause.asarpath'],
+  // app.asar also appears in every DSH stack frame URL — it must not swallow
+  // the exception that actually happened.
+  [
+    'Error: code run failed (exception): ReferenceError: g3 is not defined at eval (eval at evaluate (file:///C:/Programs/DeepSeek%20Harness/resources/app.asar/dsh/process.js:1293:33), <anonymous>:1:1)',
+    'cause.jstype',
+  ],
   // 48 occurrences across 13 sessions: the fetch never left the machine, and the
   // raw text says "TypeError", which used to file it as a JavaScript bug.
   ['web fetch failed: TypeError: fetch failed', 'cause.webnet'],
@@ -82,7 +88,6 @@ const cases = [
   ['Error: cannot edit "D:\\p\\a.md": file changed since it was read — re-read the file, then retry', 'cause.stale'],
   ['Error: source path must stay inside the workspace: C:/work/out.md', 'cause.pathguard'],
   ['Error: dsh auto-denied this action: approval prompts are disabled in this session, so nobody was asked.', 'cause.approvaloff'],
-  ['Error: dsh-ops cordis mode replaced the official tool read with ops_inspect_local_file; call it instead', 'cause.modeReplace'],
   ['Error: unknown tool "bash"', 'cause.unknownTool'],
   ['Error: Host Cordis inspect Config.listConfigs rejected input: "input" must be an object', 'cause.invalidargs'],
   ['Error: the user cancelled ask_user_question [ASK_CANCELLED]', 'cause.askcancelled'],
@@ -91,6 +96,27 @@ const cases = [
   ['Error: cannot read "a.png" as an image: model "deepseek-v4.1-flash" does not declare image input', 'cause.vision'],
   ['Error: [Compression refused: no net shrink — the summary you supplied is not smaller than the range it replaces]', 'cause.compress'],
   ['Error: DeepSeek search has no API key for "DEEPSEEK_API_KEY" [WEB_PROVIDER_CREDENTIAL_MISSING]', 'cause.auth'],
+  // Preflight denials mined from actual sessions (path hard-gate, exit code):
+  // keep them specific instead of letting generic "not found" or "timeout" win.
+  ['rejected: PATH_RESTRICTED inspect_local_file: Links, reparse points are not traversed', 'cause.pathguard'],
+  ['[stderr] no index.html in /tmp/webgl-probe [EXIT_CODE; effects: unknown] Inspect the exit code and output', 'cause.exitcode'],
+  // Full-session scan (824 logs, 2114 failures): recurring unattributed texts.
+  ['Error: cannot read "a.md": the .md extension does not declare a supported image format', 'cause.imgtype'],
+  ['Error: unsupported content type "application/javascript"', 'cause.imgtype'],
+  ['Error: 路径硬门拒绝：非完整绝对路径的产物路径，不能放行', 'cause.abspath'],
+  ['Error: Client inspect query Slots.listSubTree has no connected Harness page', 'cause.offline'],
+  ['Error: mcp-client(shakeink): server is disconnected', 'cause.offline'],
+  ['Error: subagent limit reached (active child limit: 8)', 'cause.limit'],
+  ['Error: read_page needs an http(s) "url"', 'cause.invalidargs'],
+  ['Error: old_string and new_string must differ', 'cause.invalidargs'],
+  ['Error: grep pattern rejected by ripgrep: regex parse error: look-around is not supported', 'cause.invalidargs'],
+  ['read :: File does not exist.', 'cause.enoent'],
+  ['Error: cannot resolve host "example.invalid"', 'cause.dns'],
+  ['pwsh :: The tool call was interrupted after it was recorded, but no result was durably recorded', 'cause.abort'],
+  ['job_kill :: Error: unknown job ch3-draft', 'cause.missing'],
+  ['update_goal :: Error: no current goal', 'cause.missing'],
+  ['edit :: Error: invalid escalation: justification is only valid together with sandbox_permissions', 'cause.invalidargs'],
+  ['subagent :: Error: child LLM reasoning_effort requires both provider and model', 'cause.invalidargs'],
 ];
 
 let failed = 0;
@@ -99,6 +125,23 @@ for (const [text, want] of cases) {
   const ok = got === want;
   if (!ok) failed += 1;
   console.log((ok ? 'PASS' : 'FAIL') + '  ' + String(got) + '  <- ' + text.slice(0, 72));
+}
+// A session rule must match repeated failures across volatile details (seq,
+// paths, numbers) while keeping a user's wording ahead of the built-in table.
+const matcherSrc = src.slice(src.indexOf('function normalizeRuleText('), src.indexOf('function describeError('));
+const matcherBody = matcherSrc.slice(0, matcherSrc.lastIndexOf('}') + 1);
+const extra = new Function('isRecord', matcherBody + '\nreturn { normalizeRuleText, ruleHaystack, sessionRulePattern, matchSessionRule };')((v) => v !== null && typeof v === 'object' && !Array.isArray(v));
+const ruleRecord = { message: 'tool failed at seq=17 on C:\\p\\a.md', code: 'INVALID_ARGUMENT', tool: 'edit', path: 'C:\\p\\a.md', args: '', raw: '' };
+const rulePattern = extra.sessionRulePattern(ruleRecord);
+const learnedRule = { id: 'cause.invalidargs|edit', pattern: rulePattern, causeZh: '参数错误', causeEn: 'bad args', nextZh: '处理建议：改参数', nextEn: 'Fix the args', enabled: true };
+const matched = extra.matchSessionRule({ ...ruleRecord, message: 'tool failed at seq=99 on C:\\p\\b.md' }, [learnedRule]);
+const notMatched = extra.matchSessionRule({ message: 'totally different', tool: 'read' }, [learnedRule]);
+for (const [label, ok] of [
+  ['session rule matches across volatile text', matched === learnedRule],
+  ['session rule does not match unrelated failure', notMatched === undefined],
+]) {
+  if (!ok) failed += 1;
+  console.log((ok ? 'PASS' : 'FAIL') + '  ' + label);
 }
 console.log(failed === 0 ? '\nall ' + cases.length + ' cases pass' : '\n' + failed + ' failing');
 process.exit(failed === 0 ? 0 : 1);

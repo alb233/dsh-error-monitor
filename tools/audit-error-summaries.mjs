@@ -249,7 +249,9 @@ function foldErrors(events) {
 
     if (event.type === 'tool/result') {
       const error = data.error;
-      if (!isRecord(error)) continue;
+      const resultMessage = isRecord(data.message) ? data.message : undefined;
+      const body = resultText(data);
+      if (!isRecord(error) && !(resultMessage && resultMessage.isError === true)) continue;
       const message = isRecord(data.message) ? data.message : undefined;
       const source = isRecord(message) && isRecord(message.source) ? message.source : undefined;
       const callId =
@@ -263,7 +265,7 @@ function foldErrors(events) {
       const call = callId !== null ? calls.get(callId) : undefined;
       const tool = call ? call.name : null;
       const target = call ? call.path : null;
-      const explicit = typeof error.reason === 'string' && error.reason !== '' ? error.reason : '';
+      const explicit = isRecord(error) && typeof error.reason === 'string' && error.reason !== '' ? error.reason : '';
       const record = {
         source: 'tool',
         seq,
@@ -272,7 +274,7 @@ function foldErrors(events) {
         tool,
         path: target,
         code: codeOf(error),
-        detail: stripToolHints(explicit !== '' ? explicit : resultText(data)),
+        detail: stripToolHints(explicit !== '' ? explicit : body),
       };
       record.message = describeError(record);
       records.push(record);
@@ -353,8 +355,26 @@ function groupRecords(records) {
 
 /* ------------------------------------------------------------------ driver */
 
+/**
+ * A session log is several independently compressed zstd frames concatenated.
+ * zstdDecompressSync only decodes the first one, which silently hides every
+ * later event — split on the frame magic and decode each frame in turn.
+ */
+function decompressAll(buf) {
+  const MAGIC = Buffer.from([0x28, 0xb5, 0x2f, 0xfd]);
+  const starts = [];
+  for (let i = buf.indexOf(MAGIC); i >= 0; i = buf.indexOf(MAGIC, i + 4)) starts.push(i);
+  if (starts.length === 0) return buf.toString('utf8');
+  const parts = [];
+  for (let k = 0; k < starts.length; k++) {
+    const end = k + 1 < starts.length ? starts[k + 1] : buf.length;
+    parts.push(zlib.zstdDecompressSync(buf.subarray(starts[k], end)));
+  }
+  return Buffer.concat(parts).toString('utf8');
+}
+
 function readHeader(file) {
-  const text = zlib.zstdDecompressSync(fs.readFileSync(file)).toString('utf8');
+  const text = decompressAll(fs.readFileSync(file));
   const first = text.split('\n').find((line) => line.trim());
   if (first === undefined) return undefined;
   const record = JSON.parse(first);
@@ -382,7 +402,7 @@ function findLogs() {
 }
 
 function readEvents(file) {
-  const text = zlib.zstdDecompressSync(fs.readFileSync(file)).toString('utf8');
+  const text = decompressAll(fs.readFileSync(file));
   const events = [];
   for (const line of text.split('\n')) {
     if (!line.trim()) continue;

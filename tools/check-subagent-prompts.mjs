@@ -24,8 +24,8 @@ const check = (name, ok, detail) => cases.push({ name, ok: ok === true, detail }
 const count = (needle) => source.split(needle).length - 1;
 
 check(
-  'all four send.* prompts carry the child note (en + zh)',
-  count('Session id: {sessionId}{childNote}') === 4 && count('会话 ID：{sessionId}{childNote}') === 4,
+  'all two remaining send.* prompts carry the child note (en + zh)',
+  count('Session id: {sessionId}{childNote}') === 2 && count('会话 ID：{sessionId}{childNote}') === 2,
   `en=${count('Session id: {sessionId}{childNote}')} zh=${count('会话 ID：{sessionId}{childNote}')}`,
 );
 

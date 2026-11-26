@@ -89,8 +89,8 @@ for (const [name, entries, wantParent, wantChildren] of cases) {
 // itself would silently tick off the wrong parent card.
 const checks = [
   [
-    'send.fix and send.retry templates use {marker}',
-    (src.match(/\{marker\} \(verbatim\)/g) || []).length + (src.match(/\{marker\}（原样照抄）/g) || []).length === 4,
+    'send.fix templates use {marker}',
+    (src.match(/\{marker\} \(verbatim\)/g) || []).length + (src.match(/\{marker\}（原样照抄）/g) || []).length === 2,
   ],
   ['no template hard-codes a bare seq marker', !src.includes('ERROR-MONITOR-FIXED seq={seq}')],
   ['marker is built from the record seq', src.includes("'ERROR-MONITOR-FIXED seq=' + String(record.seq)")],

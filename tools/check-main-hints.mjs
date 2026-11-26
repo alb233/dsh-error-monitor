@@ -41,17 +41,19 @@ check(
 );
 
 check(
-  'a verified rerun also marks the card resolved',
-  source.includes('so the monitor can tick this card off') &&
-    source.includes('监控插件据此把卡片标为已解决'),
-  'send.retry carries the marker too',
+  'the repair handshake asks for a verified marker',
+  source.includes('The monitor reads that line to tick this card off') &&
+    source.includes('监控插件读这一行把卡片标为已解决'),
+  'send.fix carries the marker handshake',
 );
 
 check(
-  'automatic tick-off is announced and self-clears',
-  source.includes("t('banner.autoResolved', { n: String(autoTicked) })") &&
-    /window\.setTimeout\(\(\) => setAutoTicked\(0\), 8000\)/.test(source),
-  'no silent disappearance',
+  'automatic tick-off is announced in the unified notice bar',
+  source.includes("const noticeKey = attentionNew > 0 ? 'new' : autoTicked > 0 ? 'auto' : ruleLearned !== '' ? 'rule' : '';") &&
+    source.includes("noticeKey === 'auto'") &&
+    source.includes("t('banner.autoResolved', { n: String(autoTicked) })") &&
+    source.includes("className: 'emx-banner' + (noticeKey === 'new' ? '' : ' emx-bannerQuiet')"),
+  'auto-resolved notification is shown in the single banner, no silent disappearance',
 );
 
 check(
